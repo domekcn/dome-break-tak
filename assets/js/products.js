@@ -38,7 +38,7 @@ const FLAVORS = [
     color: "amber",
     tagColor: "bg-amber-500",
     badgeBg: "bg-amber-100 text-amber-900 border-amber-300",
-    desc: "รสกล้วยแท้ธรรมชาติ กรอบ หอม หวานกลมกล่อมจากกล้วยน้ำว้าคัดพิเศษ ไม่ใส่น้ำตาลเพิ่ม",
+    desc: "รสกล้วยแท้ธรรมชาติ กรอบ หอม หวานกลมกล่อมจากกล้วยน้ำหอมทองคัดพิเศษ ไม่ใส่น้ำตาลเพิ่ม",
     stickerImage: "assets/images/flavor_original.jpg",
     accentColor: "#F59E0B"
   },
