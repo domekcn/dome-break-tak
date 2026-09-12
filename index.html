@@ -417,7 +417,7 @@
   </div>
 
   <!-- 9. CHECKOUT & PROMPTPAY QR MODAL -->
-  <div id="checkout-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center">
+  <div id="checkout-modal" onclick="if (event.target === this) closeCheckoutModal()" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center">
     <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-6 border border-amber-200">
       
       <!-- Checkout Header -->

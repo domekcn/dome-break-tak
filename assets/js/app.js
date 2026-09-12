@@ -7,7 +7,9 @@ let state = {
   selectedSize: 'small-bag',
   selectedQuantity: 1,
   slipDataUrl: null,
-  currentOrder: null
+  currentOrder: null,
+  checkoutItems: [],
+  isDirectBuy: false
 };
 
 // เริ่มต้นระบบเมื่อเปิดหน้าเว็บ
@@ -311,6 +313,27 @@ function handleAddToCart(isBuyNow = false) {
   const flavor = FLAVORS.find(f => f.id === state.selectedFlavorId);
   const unitPrice = product.prices[flavor.id];
 
+  if (isBuyNow) {
+    // โหมด "ซื้อทันที": ส่งเข้าระบบชำระเงินโดยตรง ไม่นำเข้าตะกร้าสินค้า
+    state.isDirectBuy = true;
+    state.checkoutItems = [{
+      productId: product.id,
+      productName: product.name,
+      sizeLabel: product.sizeLabel,
+      flavorId: flavor.id,
+      flavorName: flavor.name,
+      flavorEmoji: flavor.emoji,
+      unitPrice: unitPrice,
+      quantity: state.selectedQuantity,
+      image: flavor.stickerImage
+    }];
+
+    closeShopeeVariantModal();
+    openCheckoutModal(true);
+    return;
+  }
+
+  // โหมด "หยิบใส่ตะกร้า": นำเข้าตะกร้าสินค้าปกติ
   const existingIndex = state.cart.findIndex(
     item => item.productId === product.id && item.flavorId === flavor.id
   );
@@ -334,12 +357,7 @@ function handleAddToCart(isBuyNow = false) {
   closeShopeeVariantModal();
   saveState();
   updateCartBadge();
-
-  if (isBuyNow) {
-    openCheckoutModal();
-  } else {
-    showToast(`เพิ่ม "${product.sizeLabel} - ${flavor.name}" จำนวน ${state.selectedQuantity} ถุง ลงตะกร้าแล้ว!`);
-  }
+  showToast(`เพิ่ม "${product.sizeLabel} - ${flavor.name}" จำนวน ${state.selectedQuantity} ถุง ลงตะกร้าแล้ว!`);
 }
 
 // อัปเดตตัวเลขนับบนไอคอนตะกร้า
@@ -516,9 +534,18 @@ function handleDeliveryMethodChange(method) {
   updateCheckoutSummary();
 }
 
+// ดึงรายการสินค้าสำหรับหน้าชำระเงิน (แยกกรณีซื้อทันที vs ตะกร้า)
+function getCheckoutItems() {
+  if (state.isDirectBuy && state.checkoutItems && state.checkoutItems.length > 0) {
+    return state.checkoutItems;
+  }
+  return state.cart;
+}
+
 // อัปเดตสรุปยอดและค่าจัดส่งในหน้าชำระเงิน
 function updateCheckoutSummary() {
-  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const items = getCheckoutItems();
+  const itemsSubtotal = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
   const isOffice = (state.deliveryMethod || 'office') === 'office';
   const shippingFee = isOffice ? 0 : 50;
   const grandTotal = itemsSubtotal + shippingFee;
@@ -528,7 +555,7 @@ function updateCheckoutSummary() {
 
   const orderList = document.getElementById('checkout-items-summary');
   if (orderList) {
-    const itemsHtml = state.cart.map(i => `
+    const itemsHtml = items.map(i => `
       <div class="flex justify-between text-xs py-1 border-b border-gray-100">
         <span class="text-gray-700">${i.sizeLabel} (${i.flavorEmoji} ${i.flavorName}) x ${i.quantity}</span>
         <span class="font-bold text-gray-900">฿${i.unitPrice * i.quantity}</span>
@@ -556,9 +583,16 @@ function updateCheckoutSummary() {
 }
 
 // หน้าชำระเงิน พร้อมเพย์ QR
-function openCheckoutModal() {
+function openCheckoutModal(isDirect = false) {
   closeCartDrawer();
-  if (state.cart.length === 0) {
+
+  if (!isDirect) {
+    state.isDirectBuy = false;
+    state.checkoutItems = [];
+  }
+
+  const items = getCheckoutItems();
+  if (items.length === 0) {
     showToast('กรุณาเลือกสินค้าใส่ตะกร้าก่อนชำระเงิน');
     return;
   }
@@ -577,10 +611,18 @@ function openCheckoutModal() {
 function closeCheckoutModal() {
   const modal = document.getElementById('checkout-modal');
   if (modal) modal.classList.add('hidden');
+
+  // หากอยู่ในโหมด "ซื้อทันที" แล้วปิด popup (กด x หรือยกเลิก)
+  // ให้ล้างรายการทิ้งทันที โดยไม่มีการนำสินค้าไปใส่ตะกร้า
+  if (state.isDirectBuy) {
+    state.checkoutItems = [];
+    state.isDirectBuy = false;
+  }
 }
 
 function copyAmount() {
-  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const items = getCheckoutItems();
+  const itemsSubtotal = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
   const isOffice = (state.deliveryMethod || 'office') === 'office';
   const shippingFee = isOffice ? 0 : 50;
   const grandTotal = (itemsSubtotal + shippingFee).toFixed(2);
@@ -653,8 +695,9 @@ function handleOrderSubmit(e) {
     }
   }
 
-  const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
-  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const items = getCheckoutItems();
+  const totalBags = items.reduce((sum, item) => sum + item.quantity, 0);
+  const itemsSubtotal = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
   const shippingFee = isOffice ? 0 : 50;
   const grandTotal = itemsSubtotal + shippingFee;
 
@@ -666,7 +709,7 @@ function handleOrderSubmit(e) {
   updateMissionBar();
 
   // สร้างข้อความสรุปเพื่อส่งเข้า LINE Official @448gijej
-  const orderItemsText = state.cart.map(i => `- ${i.sizeLabel} (${i.flavorName}) x ${i.quantity} ถุง (${i.unitPrice * i.quantity} บ.)`).join('\n');
+  const orderItemsText = items.map(i => `- ${i.sizeLabel} (${i.flavorName}) x ${i.quantity} ถุง (${i.unitPrice * i.quantity} บ.)`).join('\n');
   const slipNote = state.slipDataUrl ? '(แนบสลิปโอนเงินผ่านระบบแล้ว)' : '(รบกวนส่งสลิปโอนเงินในแชทนี้)';
   const deliveryLabel = isOffice ? '🏢 จัดส่งที่ออฟฟิศ (ส่งฟรี)' : '🚚 จัดส่งทางอื่น ๆ (เหมา 50 บ.)';
 
@@ -694,12 +737,19 @@ function handleOrderSubmit(e) {
     lineMessage
   };
 
+  const wasDirectBuy = state.isDirectBuy;
   triggerConfetti();
   closeCheckoutModal();
 
-  state.cart = [];
-  saveState();
-  updateCartBadge();
+  // หากสั่งซื้อผ่านตะกร้า ให้เคลียร์สินค้าในตะกร้า
+  // หากสั่งซื้อผ่าน "ซื้อทันที" ตะกร้าเดิมยังคงอยู่ตามปกติ
+  if (!wasDirectBuy) {
+    state.cart = [];
+    saveState();
+    updateCartBadge();
+  }
+  state.checkoutItems = [];
+  state.isDirectBuy = false;
 
   openOrderSuccessModal();
 }
