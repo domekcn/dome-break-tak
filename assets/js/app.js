@@ -472,9 +472,8 @@ function renderCartDrawer() {
   if (summarySection) summarySection.classList.remove('hidden');
 
   const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
-  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-  const isFreeShipping = totalBags >= SHOP_CONFIG.freeShippingBags;
-  const shippingFee = isFreeShipping ? 0 : SHOP_CONFIG.shippingRate;
+  const isOffice = (state.deliveryMethod || 'office') === 'office';
+  const shippingFee = isOffice ? 0 : 50;
   const grandTotal = itemsSubtotal + shippingFee;
 
   container.innerHTML = state.cart.map((item, idx) => {
@@ -512,16 +511,14 @@ function renderCartDrawer() {
 
   if (totalBagsEl) totalBagsEl.textContent = `${totalBags} ถุง`;
   if (subtotalEl) subtotalEl.textContent = `฿${itemsSubtotal}`;
-  if (shippingEl) shippingEl.textContent = isFreeShipping ? 'ส่งฟรี!' : `฿${shippingFee}`;
+  if (shippingEl) {
+    shippingEl.textContent = isOffice ? 'ฟรี! (ออฟฟิศ)' : '฿50';
+    shippingEl.className = isOffice ? 'font-bold text-emerald-600' : 'font-bold text-[#EE4D2D]';
+  }
   if (grandTotalEl) grandTotalEl.textContent = `฿${grandTotal}`;
 
   if (freeShipBadge) {
-    if (isFreeShipping) {
-      freeShipBadge.innerHTML = `<span class="text-xs text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full font-bold">🎉 ยินดีด้วย คุณได้รับสิทธิ์ส่งฟรี!</span>`;
-    } else {
-      const moreBags = SHOP_CONFIG.freeShippingBags - totalBags;
-      freeShipBadge.innerHTML = `<span class="text-xs text-amber-800 bg-amber-100 px-3 py-1 rounded-full">สั่งเพิ่มอีก ${moreBags} ถุง เพื่อรับสิทธิ์ส่งฟรีทันที!</span>`;
-    }
+    freeShipBadge.innerHTML = `<span class="text-xs text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full font-bold">🏢 จัดส่งที่ออฟฟิศ ส่งฟรี! (หรือจัดส่งทางอื่น ๆ เหมา 50 บาท)</span>`;
   }
 }
 
