@@ -445,10 +445,10 @@ function openCartDrawer() {
   const content = document.getElementById('cart-drawer-content');
   if (drawer && content) {
     drawer.classList.remove('hidden');
-    setTimeout(() => {
-      content.classList.remove('translate-x-full');
+    requestAnimationFrame(() => {
       drawer.classList.remove('opacity-0');
-    }, 10);
+      content.classList.remove('translate-x-full');
+    });
   }
 }
 
