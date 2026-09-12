@@ -759,8 +759,15 @@ function handleOrderSubmit(e) {
   if (addressInput && addressInput.value.trim()) customerDetailsText += `ที่อยู่: ${addressInput.value.trim()}\n`;
   if (noteInput && noteInput.value.trim()) customerDetailsText += `หมายเหตุ: ${noteInput.value.trim()}\n`;
 
+  const lKey = getLoyaltyKey(nameInput.value.trim(), phoneInput ? phoneInput.value.trim() : '');
+  const prevLoyalty = getCustomerLoyalty(lKey);
+  const newStampsCount = prevLoyalty.currentStamps + totalBags;
+  const cardStamps = newStampsCount % 10;
+  const stampsInfoText = `🎫 แต้มสะสม: ${cardStamps}/10 ถุง (สะสมทั้งหมด ${newStampsCount} ถุง)\n`;
+
   const lineMessage = `🍌 ยืนยันคำสั่งซื้อ กล้วยเบรคแตก [ออเดอร์ #${orderId}] 🍌\n\n` +
-    `👤 ข้อมูลผู้สั่งซื้อ:\n${customerDetailsText}\n` +
+    `👤 ข้อมูลผู้สั่งซื้อ:\n${customerDetailsText}` +
+    `${stampsInfoText}\n` +
     `📦 รายการสินค้า:\n${orderItemsText}\n\n` +
     `รวมค่าสินค้า: ฿${itemsSubtotal}\n` +
     `ค่าจัดส่ง: ${isOffice ? 'ฟรี! (ส่งที่ออฟฟิศ)' : '฿50'}\n` +
@@ -873,6 +880,9 @@ function openOrderSuccessModal() {
     document.getElementById('success-customer-name').textContent = order.customerName;
     document.getElementById('success-phone').textContent = order.phone;
     document.getElementById('success-grand-total').textContent = '฿' + order.grandTotal;
+
+    // อัปเดตและแสดงแอนิเมชันปั๊มตราบัตรสะสมแต้ม E-Stamp
+    updateSuccessStampCard(order, order.totalBags || 1);
   }
 
   modal.classList.remove('hidden');
@@ -881,6 +891,291 @@ function openOrderSuccessModal() {
 function closeOrderSuccessModal() {
   const modal = document.getElementById('order-success-modal');
   if (modal) modal.classList.add('hidden');
+}
+
+// ==========================================
+// 🎫 ระบบบัตรสะสมแต้ม E-Stamp (Loyalty Card)
+// ==========================================
+
+function getLoyaltyKey(name, phone) {
+  const cleanPhone = (phone || '').replace(/\D/g, '');
+  if (cleanPhone && cleanPhone.length >= 9) {
+    return 'p_' + cleanPhone;
+  }
+  const cleanName = (name || '').trim().toLowerCase().replace(/\s+/g, '');
+  return 'n_' + (cleanName || 'guest');
+}
+
+function getAllLoyaltyData() {
+  try {
+    return JSON.parse(localStorage.getItem('dbt_loyalty_data') || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function getCustomerLoyalty(key) {
+  const all = getAllLoyaltyData();
+  return all[key] || {
+    customerName: '',
+    phone: '',
+    currentStamps: 0,
+    totalBagsLifetime: 0,
+    totalRewardsEarned: 0
+  };
+}
+
+function saveCustomerLoyalty(key, data) {
+  try {
+    const all = getAllLoyaltyData();
+    all[key] = data;
+    localStorage.setItem('dbt_loyalty_data', JSON.stringify(all));
+    localStorage.setItem('dbt_active_loyalty_key', key);
+  } catch (e) {}
+}
+
+// เรนเดอร์ช่องตราสแตมป์ 10 ช่อง พร้อมอนิเมชันปั๊มตรา
+function renderStampGrid(containerEl, currentStamps, newlyAdded = 0) {
+  if (!containerEl) return;
+  containerEl.innerHTML = '';
+
+  const stampsBefore = Math.max(0, currentStamps - newlyAdded);
+
+  for (let i = 1; i <= 10; i++) {
+    const isStamped = i <= currentStamps;
+    const isNewlyStamped = isStamped && i > stampsBefore;
+    const isSlot10 = (i === 10);
+
+    const slot = document.createElement('div');
+    slot.className = `relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all duration-300 ${
+      isStamped
+        ? 'bg-gradient-to-br from-yellow-300 via-amber-400 to-amber-500 text-amber-950 shadow-md shadow-amber-900/20 ring-2 ring-yellow-200 font-extrabold'
+        : 'border-2 border-dashed border-white/40 bg-white/10 text-white/60'
+    }`;
+
+    // แต้มใหม่ที่เพิ่งได้ ให้เล่นแอนิเมชันปั๊มตรา
+    if (isNewlyStamped) {
+      const delayMs = (i - stampsBefore - 1) * 220;
+      slot.style.animationDelay = `${delayMs}ms`;
+      slot.classList.add('animate-stamp-in');
+    }
+
+    if (isStamped) {
+      if (isSlot10) {
+        slot.innerHTML = `
+          <span class="text-xl sm:text-2xl animate-bounce-slow">🎁</span>
+          <span class="text-[9px] font-black uppercase leading-none mt-0.5 text-amber-950">ฟรี 1 ถุง</span>
+        `;
+      } else {
+        slot.innerHTML = `
+          <span class="text-xl sm:text-2xl">🍌</span>
+          <span class="text-[9px] font-black leading-none mt-0.5">${i}</span>
+        `;
+      }
+    } else {
+      if (isSlot10) {
+        slot.innerHTML = `
+          <span class="text-base sm:text-lg opacity-40">🎁</span>
+          <span class="text-[8px] font-bold text-white/70">ฟรี 1 ถุง</span>
+        `;
+      } else {
+        slot.innerHTML = `
+          <span class="text-xs sm:text-sm font-bold opacity-70">${i}</span>
+        `;
+      }
+    }
+
+    containerEl.appendChild(slot);
+  }
+}
+
+// อัปเดตบัตรสะสมแต้มในหน้า Order Success
+function updateSuccessStampCard(order, addedBags) {
+  const key = getLoyaltyKey(order.customerName, order.phone);
+  const prevRecord = getCustomerLoyalty(key);
+
+  const prevStamps = prevRecord.currentStamps;
+  const newStampsTotal = prevStamps + addedBags;
+  const currentCardStamps = newStampsTotal % 10;
+  const rewardsEarned = Math.floor(newStampsTotal / 10);
+
+  const updatedRecord = {
+    customerName: order.customerName,
+    phone: order.phone,
+    currentStamps: newStampsTotal,
+    totalBagsLifetime: (prevRecord.totalBagsLifetime || 0) + addedBags,
+    totalRewardsEarned: rewardsEarned
+  };
+  saveCustomerLoyalty(key, updatedRecord);
+
+  // อัปเดต UI บนการ์ด
+  const customerBadge = document.getElementById('stamp-customer-badge');
+  const statusText = document.getElementById('stamp-status-text');
+  const rewardBadge = document.getElementById('stamp-reward-badge');
+  const congratsBanner = document.getElementById('stamp-congrats-banner');
+  const gridContainer = document.getElementById('stamp-grid-container');
+
+  if (customerBadge) customerBadge.textContent = order.customerName || 'ลูกค้า';
+
+  const displayCount = (newStampsTotal >= 10 && currentCardStamps === 0) ? 10 : currentCardStamps;
+  const remaining = 10 - displayCount;
+
+  if (statusText) statusText.textContent = `สะสมแล้ว ${displayCount}/10 ถุง (+${addedBags} ถุงรอบนี้)`;
+  if (rewardBadge) {
+    if (remaining === 0 || newStampsTotal >= 10) {
+      rewardBadge.textContent = '🎉 แลกฟรี 1 ถุงได้เลย!';
+    } else {
+      rewardBadge.textContent = `ขาดอีก ${remaining} ถุง แลกฟรี!`;
+    }
+  }
+
+  if (congratsBanner) {
+    if (newStampsTotal >= 10) {
+      congratsBanner.classList.remove('hidden');
+      setTimeout(() => triggerConfetti(), 600);
+    } else {
+      congratsBanner.classList.add('hidden');
+    }
+  }
+
+  renderStampGrid(gridContainer, displayCount, addedBags);
+}
+
+// เปิดโมดอลตรวจสอบบัตรสะสมแต้ม (เปิดดูได้ตลอดเวลา)
+function openLoyaltyModal() {
+  const modal = document.getElementById('loyalty-modal');
+  if (!modal) return;
+
+  const activeKey = localStorage.getItem('dbt_active_loyalty_key');
+  const searchInput = document.getElementById('loyalty-search-input');
+  
+  if (activeKey) {
+    const record = getCustomerLoyalty(activeKey);
+    if (searchInput) {
+      searchInput.value = (record.phone && record.phone !== '-' && record.phone !== 'จัดส่งที่ออฟฟิศ') 
+        ? record.phone 
+        : (record.customerName || '');
+    }
+    renderStandaloneCard(record);
+  } else {
+    renderStandaloneCard(null);
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeLoyaltyModal() {
+  const modal = document.getElementById('loyalty-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function handleLoyaltySearch() {
+  const searchInput = document.getElementById('loyalty-search-input');
+  const query = searchInput ? searchInput.value.trim() : '';
+
+  if (!query) {
+    showToast('กรุณากรอกเบอร์โทรหรือชื่อผู้รับ');
+    return;
+  }
+
+  const all = getAllLoyaltyData();
+  let matchedRecord = null;
+  const cleanQ = query.toLowerCase().replace(/\D/g, '');
+
+  for (const [k, v] of Object.entries(all)) {
+    const cleanPhone = (v.phone || '').replace(/\D/g, '');
+    const cleanName = (v.customerName || '').trim().toLowerCase();
+
+    if ((cleanPhone && cleanPhone.includes(cleanQ)) || (cleanName && cleanName.includes(query.toLowerCase()))) {
+      matchedRecord = v;
+      localStorage.setItem('dbt_active_loyalty_key', k);
+      break;
+    }
+  }
+
+  if (matchedRecord) {
+    renderStandaloneCard(matchedRecord);
+    showToast(`พบข้อมูลบัตรสะสมแต้มของคุณ "${matchedRecord.customerName}"`);
+  } else {
+    const newRecord = {
+      customerName: query,
+      phone: query,
+      currentStamps: 0,
+      totalBagsLifetime: 0,
+      totalRewardsEarned: 0
+    };
+    renderStandaloneCard(newRecord);
+    showToast(`ยังไม่พบประวัติสะสมแต้ม เริ่มสะสมได้ในออเดอร์แรกทันทีครับ!`);
+  }
+}
+
+function renderStandaloneCard(record) {
+  const container = document.getElementById('standalone-stamp-card-container');
+  if (!container) return;
+
+  if (!record || record.currentStamps === 0) {
+    container.innerHTML = `
+      <div class="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-xl text-left relative overflow-hidden">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">🍌</span>
+            <div>
+              <h4 class="font-extrabold text-sm text-white">บัตรสะสมแต้ม โดมเบรคแตก</h4>
+              <p class="text-[10px] text-amber-100 font-medium">ซื้อครบ 10 ถุง รับฟรีกล้วยเบรคแตก 1 ถุง! 🎁</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/20 text-yellow-200">
+            ${(record && record.customerName) ? record.customerName : 'ยังไม่มีแต้ม'}
+          </span>
+        </div>
+        <div class="grid grid-cols-5 gap-2 my-3" id="standalone-stamp-grid"></div>
+        <div class="flex items-center justify-between text-xs pt-2 border-t border-white/20">
+          <span class="font-semibold text-amber-100">สะสมแล้ว 0/10 ถุง</span>
+          <span class="font-extrabold text-yellow-200">สั่งซื้อเพื่อเริ่มสะสมแต้ม!</span>
+        </div>
+      </div>
+    `;
+    renderStampGrid(document.getElementById('standalone-stamp-grid'), 0, 0);
+    return;
+  }
+
+  const stamps = record.currentStamps;
+  const currentCardStamps = (stamps >= 10 && (stamps % 10 === 0)) ? 10 : (stamps % 10);
+  const remaining = 10 - currentCardStamps;
+
+  container.innerHTML = `
+    <div class="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-xl text-left relative overflow-hidden">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🍌</span>
+          <div>
+            <h4 class="font-extrabold text-sm text-white">บัตรสะสมแต้ม โดมเบรคแตก</h4>
+            <p class="text-[10px] text-amber-100 font-medium">ซื้อครบ 10 ถุง รับฟรีกล้วยเบรคแตก 1 ถุง! 🎁</p>
+          </div>
+        </div>
+        <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-black/20 text-yellow-200 max-w-[130px] truncate">
+          ${record.customerName || record.phone || 'สมาชิก'}
+        </span>
+      </div>
+
+      <div class="grid grid-cols-5 gap-2 my-3" id="standalone-stamp-grid"></div>
+
+      <div class="flex items-center justify-between text-xs pt-2 border-t border-white/20">
+        <span class="font-bold text-amber-100">สะสมแล้ว ${currentCardStamps}/10 ถุง (รวมสะสม ${stamps} ถุง)</span>
+        <span class="font-extrabold text-yellow-200">
+          ${remaining === 0 ? '🎉 แลกฟรี 1 ถุงได้เลย!' : `ขาดอีก ${remaining} ถุง`}
+        </span>
+      </div>
+
+      ${currentCardStamps === 10 || stamps >= 10 ? `
+        <div class="mt-3 p-2 bg-emerald-500/90 rounded-xl text-center text-xs font-extrabold text-white">
+          🎉 ได้รับสิทธิ์แลกฟรี 1 ถุง! แจ้งทางร้านใน LINE ได้เลยครับ
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  renderStampGrid(document.getElementById('standalone-stamp-grid'), currentCardStamps, 0);
 }
 
 function sendOrderToLine() {

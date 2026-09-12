@@ -115,6 +115,12 @@
           <span>📞 091-8197286</span>
         </a>
 
+        <!-- ปุ่มบัตรสะสมแต้ม -->
+        <button type="button" onclick="openLoyaltyModal()" title="ดูบัตรสะสมแต้ม" class="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition-all shadow-sm">
+          <span class="text-sm">🎫</span>
+          <span class="text-xs font-bold">สะสมแต้ม</span>
+        </button>
+
         <!-- ปุ่มตะกร้า -->
         <button onclick="openCartDrawer()" class="relative p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 transition-all active:scale-95 shadow-sm flex items-center gap-2">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
@@ -607,8 +613,45 @@
         </div>
       </div>
 
+      <!-- บัตรสะสมแต้ม E-Stamp Card -->
+      <div id="success-stamp-card-section" class="mt-4 p-4 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-xl text-left relative overflow-hidden border border-amber-300">
+        <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+        <div class="absolute -left-6 -top-6 w-24 h-24 bg-yellow-300/20 rounded-full blur-lg pointer-events-none"></div>
+
+        <div class="relative z-10">
+          <div class="flex items-center justify-between gap-2 mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl animate-bounce-slow">🎫</span>
+              <div>
+                <h4 class="font-extrabold text-sm sm:text-base leading-tight text-white">บัตรสะสมแต้ม โดมเบรคแตก</h4>
+                <p class="text-[10px] text-amber-100 font-medium">ซื้อครบ 10 ถุง รับฟรี 1 ถุงทันที! 🎁</p>
+              </div>
+            </div>
+            <span id="stamp-customer-badge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-black/20 backdrop-blur-sm border border-white/20 text-yellow-200 max-w-[120px] truncate">
+              ลูกค้า
+            </span>
+          </div>
+
+          <!-- ช่องสแตมป์ 10 ช่อง (Grid 5x2) -->
+          <div id="stamp-grid-container" class="grid grid-cols-5 gap-2 my-3">
+            <!-- Rendered dynamically by JS with pop animations -->
+          </div>
+
+          <!-- แถบสรุปแต้ม -->
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-white/20">
+            <span id="stamp-status-text" class="font-bold text-amber-100">สะสมแล้ว 0/10 ถุง</span>
+            <span id="stamp-reward-badge" class="font-extrabold text-yellow-200">ขาดอีก 10 ถุง แลกฟรี!</span>
+          </div>
+
+          <!-- แบนเนอร์แสดงเมื่อสะสมครบ 10 ถุง -->
+          <div id="stamp-congrats-banner" class="hidden mt-3 p-2.5 bg-emerald-500/95 backdrop-blur-sm rounded-2xl border border-emerald-300 text-center text-xs font-extrabold text-white animate-pulse">
+            🎉 ยินดีด้วย! สะสมครบ 10 ถุงแล้ว แจ้งรับฟรีกล้วยเบรคแตก 1 ถุงในแชท LINE ได้เลยครับ!
+          </div>
+        </div>
+      </div>
+
       <!-- ปุ่มเปิดแจ้งเตือนทาง LINE -->
-      <div class="mt-6 space-y-2.5">
+      <div class="mt-5 space-y-2.5">
         <button onclick="sendOrderToLine()" class="w-full py-3.5 px-4 rounded-xl font-extrabold text-white line-btn hover:opacity-95 shadow-xl shadow-green-600/20 active:scale-95 transition-all text-sm flex items-center justify-center gap-2">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.82 2 10.53c0 2.94 1.77 5.53 4.45 7.02-.19.67-.69 2.45-.79 2.82-.12.46.17.45.36.33.15-.1 2.41-1.63 3.39-2.3.82.16 1.68.25 2.59.25 5.52 0 10-3.82 10-8.53S17.52 2 12 2z"/></svg>
           <span>เปิดแชทแจ้งเตือนทาง LINE (@448gijej)</span>
@@ -623,6 +666,54 @@
         *ข้อความสรุปออเดอร์ถูกคัดลอกลงคลิปบอร์ดแล้ว สามารถกดวาง (Paste) ในแชท LINE ได้ทันทีครับ
       </p>
 
+    </div>
+  </div>
+
+  <!-- 12. LOYALTY CARD MODAL (สำหรับลูกค้าเปิดดูแต้มสะสมได้ตลอดเวลา) -->
+  <div id="loyalty-modal" onclick="if (event.target === this) closeLoyaltyModal()" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-amber-200">
+      <div class="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-4 sm:p-5 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🎫</span>
+          <h3 class="font-extrabold text-base sm:text-lg">บัตรสะสมแต้ม โดมเบรคแตก</h3>
+        </div>
+        <button onclick="closeLoyaltyModal()" class="p-1 rounded-full text-white/80 hover:text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5 sm:p-6 space-y-4">
+        <!-- ช่องค้นหาแต้มด้วยเบอร์โทรหรือชื่อ -->
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1.5">🔍 ตรวจสอบแต้มสะสม (กรอกเบอร์โทร หรือ ชื่อผู้รับ):</label>
+          <div class="flex gap-2">
+            <input type="text" id="loyalty-search-input" placeholder="เช่น 0891234567 หรือ ชื่อเล่น" class="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400 font-medium">
+            <button type="button" onclick="handleLoyaltySearch()" class="px-4 py-2.5 rounded-xl font-bold text-white bg-amber-500 hover:bg-amber-600 text-xs shadow transition-colors">
+              ค้นหา
+            </button>
+          </div>
+        </div>
+
+        <!-- กล่องแสดงการ์ดสะสมแต้ม -->
+        <div id="standalone-stamp-card-container">
+          <!-- Rendered via JS -->
+        </div>
+
+        <!-- กติกาการสะสมแต้ม -->
+        <div class="p-3.5 bg-amber-50/80 rounded-2xl border border-amber-200 text-xs text-amber-900 space-y-1.5">
+          <div class="font-bold flex items-center gap-1 text-amber-950">
+            <span>🍌</span>
+            <span>กติกาการสะสมแต้ม:</span>
+          </div>
+          <p class="text-gray-600">• ซื้อกล้วยเบรคแตกขนาดใดก็ได้ <strong>1 ถุง = รับ 1 แต้ม</strong></p>
+          <p class="text-gray-600">• สะสมครบ <strong>10 แต้ม = รับฟรี 1 ถุงทันที</strong> ในการสั่งซื้อรอบถัดไป</p>
+          <p class="text-gray-600">• แต้มสะสมไม่มีวันหมดอายุ สามารถแจ้งใช้สิทธิ์ในแชท LINE ได้เลยครับ</p>
+        </div>
+
+        <button type="button" onclick="closeLoyaltyModal()" class="w-full py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs transition-colors">
+          ปิดหน้าต่าง
+        </button>
+      </div>
     </div>
   </div>
 
