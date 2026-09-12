@@ -1,0 +1,699 @@
+// ระบบการทำงานร้าน โดมเบรคแตก (DOME BREAK TAK)
+let state = {
+  cart: [],
+  missionBags: SHOP_CONFIG.initialSimulatedBags,
+  selectedProduct: null,
+  selectedFlavorId: 'original',
+  selectedSize: 'small-bag',
+  selectedQuantity: 1,
+  slipDataUrl: null,
+  currentOrder: null
+};
+
+// เริ่มต้นระบบเมื่อเปิดหน้าเว็บ
+document.addEventListener('DOMContentLoaded', () => {
+  loadSavedState();
+  renderProducts();
+  renderFlavorCards();
+  updateMissionBar();
+  updateCartBadge();
+  setupEventListeners();
+});
+
+// ดึงข้อมูลจาก LocalStorage
+function loadSavedState() {
+  try {
+    const savedCart = localStorage.getItem('dbt_cart');
+    if (savedCart) state.cart = JSON.parse(savedCart);
+    const savedMission = localStorage.getItem('dbt_mission');
+    if (savedMission) state.missionBags = parseInt(savedMission);
+  } catch (e) {}
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('dbt_cart', JSON.stringify(state.cart));
+    localStorage.setItem('dbt_mission', state.missionBags.toString());
+  } catch (e) {}
+}
+
+// อัปเดตแถบภารกิจนับถุงสะสม (ครบ 10 ถุง เปิดเตาทอดรอบส่งทันที)
+function updateMissionBar() {
+  const current = state.missionBags;
+  const target = SHOP_CONFIG.missionTargetBags;
+  const percent = Math.min(100, Math.round((current / target) * 100));
+  const remaining = Math.max(0, target - current);
+
+  const bar = document.getElementById('mission-progress-fill');
+  const countText = document.getElementById('mission-count-text');
+  const remainText = document.getElementById('mission-remaining-text');
+  const statusBadge = document.getElementById('mission-status-badge');
+
+  if (bar) bar.style.width = `${percent}%`;
+  if (countText) countText.textContent = `${current}/${target} ถุง (${percent}%)`;
+
+  if (remaining === 0) {
+    if (remainText) remainText.innerHTML = `<span class="text-emerald-300 font-bold">🎉 ครบ 10 ถุงแล้ว! เปิดเตาทอดใหม่รอบนี้ พร้อมส่งทันที</span>`;
+    if (statusBadge) {
+      statusBadge.textContent = "🔥 ยอดครบแล้ว! กำลังทอดสด";
+      statusBadge.className = "text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white animate-pulse";
+    }
+  } else {
+    if (remainText) remainText.innerHTML = `เป้าหมายครบ 10 ถุงเปิดเตาทอดสดใหม่! ขาดอีกเพียง <strong class="text-yellow-300 font-bold text-base">${remaining}</strong> ถุง`;
+    if (statusBadge) {
+      statusBadge.textContent = "⚡ กำลังสะสมยอด";
+      statusBadge.className = "text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-400 text-amber-950";
+    }
+  }
+}
+
+// แสดงรายการสินค้า 2 ขนาด
+function renderProducts() {
+  const container = document.getElementById('products-grid');
+  if (!container) return;
+
+  container.innerHTML = PRODUCTS.map(p => {
+    return `
+      <div class="bg-white rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 border border-amber-100 overflow-hidden flex flex-col group">
+        <!-- ภาพสินค้า -->
+        <div class="relative overflow-hidden bg-amber-50 cursor-pointer" onclick="openShopeeVariantModal('${p.id}')">
+          <img src="${p.image}" alt="${p.name}" class="w-full h-64 sm:h-72 object-cover object-center group-hover:scale-105 transition-transform duration-500">
+          <div class="absolute top-3 left-3 flex flex-col gap-1">
+            ${p.tags.map(t => `<span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-white/95 backdrop-blur-sm text-amber-900 shadow-sm border border-amber-200">${t}</span>`).join('')}
+          </div>
+          <div class="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+            <span>⭐ ${p.rating}</span>
+            <span class="text-gray-400">|</span>
+            <span>ขายแล้ว ${p.soldCount}</span>
+          </div>
+        </div>
+
+        <!-- รายละเอียดสินค้า -->
+        <div class="p-5 sm:p-6 flex-1 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                น้ำหนัก ${p.weight}
+              </span>
+              <span class="text-xs text-gray-500">${p.packageType}</span>
+            </div>
+            
+            <h3 class="text-xl font-extrabold text-gray-900 cursor-pointer group-hover:text-amber-600 transition-colors" onclick="openShopeeVariantModal('${p.id}')">
+              ${p.name}
+            </h3>
+            
+            <p class="text-xs sm:text-sm text-gray-600 mt-1.5 line-clamp-2">
+              ${p.description}
+            </p>
+
+            <!-- กล่องแสดงราคาแต่ละรสชาติ -->
+            <div class="mt-4 p-3 bg-amber-50/70 rounded-2xl border border-amber-100">
+              <div class="text-xs font-bold text-amber-900 mb-2 flex items-center justify-between">
+                <span>มีให้เลือก 4 รสชาติ (กดเลือกได้ทันที):</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <button type="button" onclick="openShopeeVariantModal('${p.id}', 'original')" class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-amber-200 hover:border-amber-400 text-left transition-colors">
+                  <span>🍌 ออริจินอล</span>
+                  <span class="font-bold text-amber-700">฿${p.prices.original}</span>
+                </button>
+                <button type="button" onclick="openShopeeVariantModal('${p.id}', 'sweet')" class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-amber-200 hover:border-amber-400 text-left transition-colors">
+                  <span>🍯 รสหวาน</span>
+                  <span class="font-bold text-amber-700">฿${p.prices.sweet}</span>
+                </button>
+                <button type="button" onclick="openShopeeVariantModal('${p.id}', 'salty')" class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-xl border border-amber-200 hover:border-amber-400 text-left transition-colors">
+                  <span>🧂 รสเค็ม</span>
+                  <span class="font-bold text-amber-700">฿${p.prices.salty}</span>
+                </button>
+                <button type="button" onclick="openShopeeVariantModal('${p.id}', 'paprika')" class="flex items-center justify-between bg-rose-50 px-2.5 py-1.5 rounded-xl border border-rose-200 hover:border-rose-400 text-left transition-colors">
+                  <span class="text-rose-700">🌶️ ปาปริก้า</span>
+                  <span class="font-bold text-rose-600">฿${p.prices.paprika}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- แถบราคาและปุ่มเลือกรสชาติ -->
+          <div class="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
+            <div>
+              <div class="text-[11px] text-gray-400">ราคาเริ่มต้น</div>
+              <div class="text-2xl font-extrabold text-[#EE4D2D]">
+                ฿${p.basePrice} <span class="text-xs font-normal text-gray-400">- ฿${p.prices.paprika}</span>
+              </div>
+            </div>
+
+            <button onclick="openShopeeVariantModal('${p.id}')" class="flex-1 max-w-[170px] py-3 px-4 rounded-xl font-bold text-white text-sm shopee-badge hover:opacity-95 active:scale-95 transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5">
+              <span>เลือกรสชาติ / สั่งซื้อ</span>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// แสดงการ์ด 4 รสชาติความอร่อย (ใช้รูปโลโก้จริงของแต่ละรสชาติ)
+function renderFlavorCards() {
+  const container = document.getElementById('flavors-grid');
+  if (!container) return;
+
+  container.innerHTML = FLAVORS.map(f => {
+    return `
+      <div class="bg-white rounded-3xl p-4 shadow-sm hover:shadow-md transition-all border border-amber-100 flex flex-col justify-between items-center text-center group">
+        <div class="w-full flex flex-col items-center">
+          <!-- รูปโลโก้รสชาติตามที่อัปโหลด -->
+          <div class="w-36 h-36 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-amber-100 shadow-inner group-hover:scale-105 transition-transform duration-300">
+            <img src="${f.stickerImage}" alt="${f.name}" class="w-full h-full object-cover">
+          </div>
+          
+          <div class="mt-3">
+            <span class="text-xs font-bold px-3 py-1 rounded-full ${f.badgeBg}">
+              ${f.emoji} ${f.name} (${f.nameEn})
+            </span>
+            <p class="text-xs text-gray-600 mt-2 leading-relaxed px-1">
+              ${f.desc}
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-gray-100 w-full flex flex-col gap-1.5">
+          <button onclick="openShopeeVariantModal('small-bag', '${f.id}')" class="w-full py-1.5 px-2 rounded-xl text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 transition-colors">
+            สั่งถุงเล็ก (฿${f.id === 'paprika' ? 50 : 45})
+          </button>
+          <button onclick="openShopeeVariantModal('large-bag', '${f.id}')" class="w-full py-1.5 px-2 rounded-xl text-xs font-bold text-amber-950 bg-amber-200/80 hover:bg-amber-300 transition-colors">
+            สั่งถุงใหญ่ (฿${f.id === 'paprika' ? 150 : 130})
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// เปิดโมดอลเลือกรสชาติสไตล์ Shopee
+function openShopeeVariantModal(productId = 'small-bag', defaultFlavor = 'original') {
+  state.selectedSize = productId;
+  state.selectedProduct = PRODUCTS.find(p => p.id === productId) || PRODUCTS[0];
+  state.selectedFlavorId = defaultFlavor;
+  state.selectedQuantity = 1;
+
+  updateModalView();
+
+  const modal = document.getElementById('variant-modal');
+  const drawer = document.getElementById('variant-drawer-content');
+  if (modal && drawer) {
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+      drawer.classList.remove('translate-y-full');
+      modal.classList.remove('opacity-0');
+    }, 10);
+  }
+}
+
+function closeShopeeVariantModal() {
+  const modal = document.getElementById('variant-modal');
+  const drawer = document.getElementById('variant-drawer-content');
+  if (modal && drawer) {
+    drawer.classList.add('translate-y-full');
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+    }, 300);
+  }
+}
+
+// อัปเดตข้อมูลบนหน้าต่าง Shopee Variant Modal แบบเรียลไทม์
+function updateModalView() {
+  const product = state.selectedProduct;
+  const flavor = FLAVORS.find(f => f.id === state.selectedFlavorId) || FLAVORS[0];
+  const unitPrice = product.prices[flavor.id];
+  const totalPrice = unitPrice * state.selectedQuantity;
+
+  // รูปแสดงตามรสชาติที่เลือก
+  const modalImg = document.getElementById('modal-product-img');
+  if (modalImg) {
+    modalImg.src = flavor.stickerImage;
+  }
+
+  // อัปเดตราคาต่อหน่วย
+  const priceDisplay = document.getElementById('modal-unit-price');
+  if (priceDisplay) priceDisplay.textContent = `฿${unitPrice}`;
+
+  // อัปเดตยอดรวมรายการ
+  const totalDisplay = document.getElementById('modal-subtotal-price');
+  if (totalDisplay) totalDisplay.textContent = `฿${totalPrice}`;
+
+  const qtyInput = document.getElementById('modal-qty-input');
+  if (qtyInput) qtyInput.value = state.selectedQuantity;
+
+  // เลือกขนาด chips (ถุงเล็ก / ถุงใหญ่)
+  const sizeContainer = document.getElementById('modal-size-options');
+  if (sizeContainer) {
+    sizeContainer.innerHTML = PRODUCTS.map(p => {
+      const isSelected = p.id === state.selectedProduct.id;
+      return `
+        <button type="button" onclick="selectModalSize('${p.id}')" class="px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold border transition-all flex items-center justify-between ${
+          isSelected
+            ? 'border-[#EE4D2D] bg-[#EE4D2D]/10 text-[#EE4D2D] ring-2 ring-[#EE4D2D]/30 shadow-sm'
+            : 'border-gray-200 bg-white text-gray-700 hover:border-amber-300'
+        }">
+          <span>${p.sizeLabel} (${p.weight})</span>
+          <span class="text-xs font-semibold ${isSelected ? 'text-[#EE4D2D]' : 'text-gray-400'}">฿${p.basePrice}-${p.prices.paprika}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  // เลือกรสชาติ chips (Shopee Style)
+  const flavorContainer = document.getElementById('modal-flavor-options');
+  if (flavorContainer) {
+    flavorContainer.innerHTML = FLAVORS.map(f => {
+      const isSelected = f.id === state.selectedFlavorId;
+      const fPrice = product.prices[f.id];
+      const diff = fPrice - product.basePrice;
+      const diffText = diff > 0 ? ` (+฿${diff})` : '';
+
+      return `
+        <button type="button" onclick="selectModalFlavor('${f.id}')" class="px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold border transition-all flex items-center justify-between ${
+          isSelected
+            ? 'border-[#EE4D2D] bg-[#EE4D2D]/10 text-[#EE4D2D] ring-2 ring-[#EE4D2D]/30 shadow-sm font-bold'
+            : 'border-gray-200 bg-white text-gray-700 hover:border-amber-300'
+        }">
+          <span>${f.emoji} ${f.name}${diffText}</span>
+          <span class="text-xs font-bold ${isSelected ? 'text-[#EE4D2D]' : 'text-gray-500'}">฿${fPrice}</span>
+        </button>
+      `;
+    }).join('');
+  }
+}
+
+function selectModalFlavor(flavorId) {
+  state.selectedFlavorId = flavorId;
+  updateModalView();
+}
+
+function selectModalSize(productId) {
+  state.selectedSize = productId;
+  state.selectedProduct = PRODUCTS.find(p => p.id === productId);
+  updateModalView();
+}
+
+function adjustModalQty(delta) {
+  const newQty = state.selectedQuantity + delta;
+  if (newQty >= 1 && newQty <= 99) {
+    state.selectedQuantity = newQty;
+    updateModalView();
+  }
+}
+
+// เพิ่มลงตะกร้า (Add to Cart) หรือ ซื้อทันที (Buy Now)
+function handleAddToCart(isBuyNow = false) {
+  const product = state.selectedProduct;
+  const flavor = FLAVORS.find(f => f.id === state.selectedFlavorId);
+  const unitPrice = product.prices[flavor.id];
+
+  const existingIndex = state.cart.findIndex(
+    item => item.productId === product.id && item.flavorId === flavor.id
+  );
+
+  if (existingIndex > -1) {
+    state.cart[existingIndex].quantity += state.selectedQuantity;
+  } else {
+    state.cart.push({
+      productId: product.id,
+      productName: product.name,
+      sizeLabel: product.sizeLabel,
+      flavorId: flavor.id,
+      flavorName: flavor.name,
+      flavorEmoji: flavor.emoji,
+      unitPrice: unitPrice,
+      quantity: state.selectedQuantity,
+      image: flavor.stickerImage
+    });
+  }
+
+  closeShopeeVariantModal();
+  saveState();
+  updateCartBadge();
+
+  if (isBuyNow) {
+    openCheckoutModal();
+  } else {
+    showToast(`เพิ่ม "${product.sizeLabel} - ${flavor.name}" จำนวน ${state.selectedQuantity} ถุง ลงตะกร้าแล้ว!`);
+  }
+}
+
+// อัปเดตตัวเลขนับบนไอคอนตะกร้า
+function updateCartBadge() {
+  const totalQty = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const badges = document.querySelectorAll('.cart-count-badge');
+  badges.forEach(b => {
+    b.textContent = totalQty;
+    if (totalQty > 0) {
+      b.classList.remove('hidden');
+      b.classList.add('animate-bounce-slow');
+    } else {
+      b.classList.add('hidden');
+      b.classList.remove('animate-bounce-slow');
+    }
+  });
+}
+
+function showToast(message) {
+  const toast = document.getElementById('app-toast');
+  const msgEl = document.getElementById('toast-message');
+  if (!toast || !msgEl) return;
+
+  msgEl.textContent = message;
+  toast.classList.remove('translate-y-24', 'opacity-0');
+  setTimeout(() => {
+    toast.classList.add('translate-y-24', 'opacity-0');
+  }, 3000);
+}
+
+// ตะกร้าสินค้าแบบสไลด์ข้าง
+function openCartDrawer() {
+  renderCartDrawer();
+  const drawer = document.getElementById('cart-drawer');
+  const content = document.getElementById('cart-drawer-content');
+  if (drawer && content) {
+    drawer.classList.remove('hidden');
+    setTimeout(() => {
+      content.classList.remove('translate-x-full');
+      drawer.classList.remove('opacity-0');
+    }, 10);
+  }
+}
+
+function closeCartDrawer() {
+  const drawer = document.getElementById('cart-drawer');
+  const content = document.getElementById('cart-drawer-content');
+  if (drawer && content) {
+    content.classList.add('translate-x-full');
+    drawer.classList.add('opacity-0');
+    setTimeout(() => {
+      drawer.classList.add('hidden');
+    }, 300);
+  }
+}
+
+function renderCartDrawer() {
+  const container = document.getElementById('cart-items-container');
+  const emptyState = document.getElementById('cart-empty-state');
+  const summarySection = document.getElementById('cart-summary-section');
+  if (!container) return;
+
+  if (state.cart.length === 0) {
+    container.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+    if (summarySection) summarySection.classList.add('hidden');
+    return;
+  }
+
+  if (emptyState) emptyState.classList.add('hidden');
+  if (summarySection) summarySection.classList.remove('hidden');
+
+  const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const isFreeShipping = totalBags >= SHOP_CONFIG.freeShippingBags;
+  const shippingFee = isFreeShipping ? 0 : SHOP_CONFIG.shippingRate;
+  const grandTotal = itemsSubtotal + shippingFee;
+
+  container.innerHTML = state.cart.map((item, idx) => {
+    const lineTotal = item.unitPrice * item.quantity;
+    return `
+      <div class="flex items-center gap-3 p-3 bg-white rounded-2xl border border-amber-100 shadow-sm">
+        <img src="${item.image}" alt="${item.flavorName}" class="w-16 h-16 rounded-full object-cover border-2 border-amber-200">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-bold text-gray-900 truncate">${item.sizeLabel}</div>
+          <div class="text-xs text-amber-700 font-semibold">${item.flavorEmoji} ${item.flavorName}</div>
+          <div class="text-xs font-bold text-[#EE4D2D] mt-0.5">฿${item.unitPrice} / ถุง</div>
+
+          <div class="flex items-center justify-between mt-2">
+            <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+              <button onclick="updateCartQty(${idx}, -1)" class="px-2 py-0.5 text-gray-600 hover:bg-gray-200 font-bold">-</button>
+              <span class="px-2.5 py-0.5 text-xs font-bold">${item.quantity}</span>
+              <button onclick="updateCartQty(${idx}, 1)" class="px-2 py-0.5 text-gray-600 hover:bg-gray-200 font-bold">+</button>
+            </div>
+            <div class="text-sm font-extrabold text-gray-900">฿${lineTotal}</div>
+          </div>
+        </div>
+        <button onclick="removeCartItem(${idx})" class="p-1.5 text-gray-400 hover:text-rose-500 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  // สรุปยอด
+  const totalBagsEl = document.getElementById('cart-total-bags');
+  const subtotalEl = document.getElementById('cart-subtotal');
+  const shippingEl = document.getElementById('cart-shipping');
+  const grandTotalEl = document.getElementById('cart-grand-total');
+  const freeShipBadge = document.getElementById('cart-free-shipping-badge');
+
+  if (totalBagsEl) totalBagsEl.textContent = `${totalBags} ถุง`;
+  if (subtotalEl) subtotalEl.textContent = `฿${itemsSubtotal}`;
+  if (shippingEl) shippingEl.textContent = isFreeShipping ? 'ส่งฟรี!' : `฿${shippingFee}`;
+  if (grandTotalEl) grandTotalEl.textContent = `฿${grandTotal}`;
+
+  if (freeShipBadge) {
+    if (isFreeShipping) {
+      freeShipBadge.innerHTML = `<span class="text-xs text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full font-bold">🎉 ยินดีด้วย คุณได้รับสิทธิ์ส่งฟรี!</span>`;
+    } else {
+      const moreBags = SHOP_CONFIG.freeShippingBags - totalBags;
+      freeShipBadge.innerHTML = `<span class="text-xs text-amber-800 bg-amber-100 px-3 py-1 rounded-full">สั่งเพิ่มอีก ${moreBags} ถุง เพื่อรับสิทธิ์ส่งฟรีทันที!</span>`;
+    }
+  }
+}
+
+function updateCartQty(index, delta) {
+  if (state.cart[index]) {
+    state.cart[index].quantity += delta;
+    if (state.cart[index].quantity <= 0) {
+      state.cart.splice(index, 1);
+    }
+    saveState();
+    updateCartBadge();
+    renderCartDrawer();
+  }
+}
+
+function removeCartItem(index) {
+  if (state.cart[index]) {
+    state.cart.splice(index, 1);
+    saveState();
+    updateCartBadge();
+    renderCartDrawer();
+  }
+}
+
+// หน้าชำระเงิน พร้อมเพย์ QR
+function openCheckoutModal() {
+  closeCartDrawer();
+  if (state.cart.length === 0) {
+    showToast('กรุณาเลือกสินค้าใส่ตะกร้าก่อนชำระเงิน');
+    return;
+  }
+
+  const modal = document.getElementById('checkout-modal');
+  if (!modal) return;
+
+  const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const isFreeShipping = totalBags >= SHOP_CONFIG.freeShippingBags;
+  const shippingFee = isFreeShipping ? 0 : SHOP_CONFIG.shippingRate;
+  const grandTotal = itemsSubtotal + shippingFee;
+
+  const amountDisplays = document.querySelectorAll('.checkout-grand-total');
+  amountDisplays.forEach(el => el.textContent = `฿${grandTotal.toFixed(2)}`);
+
+  const orderList = document.getElementById('checkout-items-summary');
+  if (orderList) {
+    orderList.innerHTML = state.cart.map(i => `
+      <div class="flex justify-between text-xs py-1 border-b border-gray-100">
+        <span class="text-gray-700">${i.sizeLabel} (${i.flavorEmoji} ${i.flavorName}) x ${i.quantity}</span>
+        <span class="font-bold text-gray-900">฿${i.unitPrice * i.quantity}</span>
+      </div>
+    `).join('');
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeCheckoutModal() {
+  const modal = document.getElementById('checkout-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function copyAmount() {
+  const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const shippingFee = totalBags >= SHOP_CONFIG.freeShippingBags ? 0 : SHOP_CONFIG.shippingRate;
+  const grandTotal = (itemsSubtotal + shippingFee).toFixed(2);
+
+  navigator.clipboard.writeText(grandTotal).then(() => {
+    showToast(`คัดลอกยอดเงิน ฿${grandTotal} เรียบร้อยแล้ว`);
+  }).catch(() => {
+    showToast(`ยอดเงิน: ฿${grandTotal}`);
+  });
+}
+
+function copyRefNo() {
+  navigator.clipboard.writeText(SHOP_CONFIG.promptPay.refNo).then(() => {
+    showToast('คัดลอกรหัสอ้างอิงพร้อมเพย์แล้ว');
+  });
+}
+
+function handleSlipUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state.slipDataUrl = e.target.result;
+    const previewContainer = document.getElementById('slip-preview-container');
+    const previewImg = document.getElementById('slip-preview-img');
+    const uploadPrompt = document.getElementById('slip-upload-prompt');
+
+    if (previewImg) previewImg.src = state.slipDataUrl;
+    if (previewContainer) previewContainer.classList.remove('hidden');
+    if (uploadPrompt) uploadPrompt.classList.add('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeSlip() {
+  state.slipDataUrl = null;
+  const previewContainer = document.getElementById('slip-preview-container');
+  const uploadPrompt = document.getElementById('slip-upload-prompt');
+  const fileInput = document.getElementById('slip-file-input');
+
+  if (previewContainer) previewContainer.classList.add('hidden');
+  if (uploadPrompt) uploadPrompt.classList.remove('hidden');
+  if (fileInput) fileInput.value = '';
+}
+
+// ยืนยันคำสั่งซื้อ
+function handleOrderSubmit(e) {
+  if (e) e.preventDefault();
+
+  const nameInput = document.getElementById('customer-name');
+  const phoneInput = document.getElementById('customer-phone');
+  const addressInput = document.getElementById('customer-address');
+  const noteInput = document.getElementById('customer-note');
+
+  if (!nameInput.value.trim()) {
+    alert('กรุณากรอกชื่อผู้รับ');
+    nameInput.focus();
+    return;
+  }
+  if (!phoneInput.value.trim()) {
+    alert('กรุณากรอกเบอร์โทรศัพท์ติดต่อ');
+    phoneInput.focus();
+    return;
+  }
+  if (!addressInput.value.trim()) {
+    alert('กรุณากรอกที่อยู่จัดส่ง');
+    addressInput.focus();
+    return;
+  }
+
+  const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const shippingFee = totalBags >= SHOP_CONFIG.freeShippingBags ? 0 : SHOP_CONFIG.shippingRate;
+  const grandTotal = itemsSubtotal + shippingFee;
+
+  const orderId = 'BT-' + Math.floor(1000 + Math.random() * 9000);
+
+  // อัปเดตแถบภารกิจตามจำนวนถุงที่สั่งซื้อจริง
+  state.missionBags = Math.min(SHOP_CONFIG.missionTargetBags, state.missionBags + totalBags);
+  saveState();
+  updateMissionBar();
+
+  // สร้างข้อความสรุปเพื่อส่งเข้า LINE Official @448gijej
+  const orderItemsText = state.cart.map(i => `- ${i.sizeLabel} (${i.flavorName}) x ${i.quantity} ถุง (${i.unitPrice * i.quantity} บ.)`).join('\n');
+  const slipNote = state.slipDataUrl ? '(แนบสลิปโอนเงินผ่านระบบแล้ว)' : '(รบกวนส่งสลิปโอนเงินในแชทนี้)';
+
+  const lineMessage = `🍌 ยืนยันคำสั่งซื้อ กล้วยเบรคแตก [ออเดอร์ #${orderId}] 🍌\n\n` +
+    `👤 ข้อมูลผู้สั่งซื้อ:\n` +
+    `ชื่อ: ${nameInput.value.trim()}\n` +
+    `เบอร์โทร: ${phoneInput.value.trim()}\n` +
+    `ที่อยู่จัดส่ง: ${addressInput.value.trim()}\n` +
+    (noteInput.value.trim() ? `หมายเหตุ: ${noteInput.value.trim()}\n` : '') +
+    `\n📦 รายการสินค้า:\n${orderItemsText}\n\n` +
+    `รวมค่าสินค้า: ฿${itemsSubtotal}\n` +
+    `ค่าจัดส่ง: ${shippingFee === 0 ? 'ส่งฟรี!' : '฿' + shippingFee}\n` +
+    `💰 ยอดโอนสุทธิ: ฿${grandTotal}\n` +
+    `สถานะ: ${slipNote}\n\n` +
+    `ขอบคุณที่อุดหนุนโดมเบรคแตกครับ!`;
+
+  state.currentOrder = {
+    orderId,
+    customerName: nameInput.value.trim(),
+    phone: phoneInput.value.trim(),
+    address: addressInput.value.trim(),
+    totalBags,
+    grandTotal,
+    lineMessage
+  };
+
+  triggerConfetti();
+  closeCheckoutModal();
+
+  state.cart = [];
+  saveState();
+  updateCartBadge();
+
+  openOrderSuccessModal();
+}
+
+function openOrderSuccessModal() {
+  const modal = document.getElementById('order-success-modal');
+  if (!modal) return;
+
+  const order = state.currentOrder;
+  if (order) {
+    document.getElementById('success-order-id').textContent = '#' + order.orderId;
+    document.getElementById('success-customer-name').textContent = order.customerName;
+    document.getElementById('success-phone').textContent = order.phone;
+    document.getElementById('success-grand-total').textContent = '฿' + order.grandTotal;
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeOrderSuccessModal() {
+  const modal = document.getElementById('order-success-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function sendOrderToLine() {
+  const order = state.currentOrder;
+  if (!order) return;
+
+  navigator.clipboard.writeText(order.lineMessage).catch(() => {});
+  const lineUrl = `https://line.me/R/ti/p/@448gijej`;
+  window.open(lineUrl, '_blank');
+}
+
+function triggerConfetti() {
+  if (typeof confetti === 'function') {
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  }
+}
+
+function setupEventListeners() {
+  const resetBtn = document.getElementById('demo-reset-mission');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      state.missionBags = (state.missionBags >= 10) ? 0 : state.missionBags + 2;
+      saveState();
+      updateMissionBar();
+      if (state.missionBags >= 10) triggerConfetti();
+    });
+  }
+}

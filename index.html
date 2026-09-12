@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>โดมเบรคแตก (DOME BREAK TAK) - กล้วยเบรคแตกสูตรเด็ด กรอบอร่อย เบรคไม่อยู่</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="assets/images/flavor_original.jpg">
+  
+  <!-- Google Font: Prompt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#EE4D2D',
+              deepOrange: '#D03E1E',
+              yellow: '#FBBF24',
+              gold: '#F59E0B',
+              dark: '#2D251E',
+              line: '#06C755'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Canvas Confetti CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-amber-200 selection:text-amber-900 pb-20 sm:pb-10">
+
+  <!-- 1. STICKY MISSION PROGRESS BAR (แถบภารกิจ 10 ออเดอร์เปิดเตาทอด) -->
+  <aside aria-label="ภารกิจเปิดเตารอบใหม่" class="sticky top-0 z-40 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-lg border-b border-amber-500/30">
+    <div class="max-w-5xl mx-auto px-4 py-2.5 sm:py-3">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-2">
+        <!-- ข้อมูลภารกิจ -->
+        <div class="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-start">
+          <div class="flex items-center gap-2">
+            <span class="text-xl sm:text-2xl animate-bounce-slow">🎯</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs sm:text-sm tracking-wide">ภารกิจเปิดเตารอบทอดสดใหม่</span>
+                <span id="mission-status-badge" class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-400 text-amber-950">
+                  กำลังสะสมยอด
+                </span>
+              </div>
+              <p id="mission-remaining-text" class="text-xs text-amber-100 mt-0.5">
+                เป้าหมายสะสมครบ <strong class="text-white font-bold">10 ถุง</strong> เพื่อเปิดรอบทอดสดและจัดส่งทันที!
+              </p>
+            </div>
+          </div>
+
+          <!-- ตัวเลขนับถุง -->
+          <span id="mission-count-text" class="text-xs sm:text-sm font-extrabold bg-black/20 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/20 whitespace-nowrap">
+            7/10 ถุง (70%)
+          </span>
+        </div>
+
+        <!-- หลอด Progress Bar -->
+        <div class="w-full sm:w-72 flex items-center gap-2">
+          <div class="flex-1 bg-black/30 rounded-full h-3.5 p-0.5 overflow-hidden border border-white/20 shadow-inner">
+            <div id="mission-progress-fill" class="h-full rounded-full bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 animate-shimmer transition-all duration-700 ease-out shadow" style="width: 70%;"></div>
+          </div>
+          <button id="demo-reset-mission" title="คลิกเพื่อทดสอบจำลองยอดภารกิจ" class="text-[10px] text-amber-200 hover:text-white underline whitespace-nowrap">
+            +จำลองยอด
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 2. NAVBAR & BRAND HEADER -->
+  <header class="bg-white/95 backdrop-blur-md sticky top-[57px] sm:top-[61px] z-30 border-b border-amber-100 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 py-2.5 sm:py-3 flex items-center justify-between">
+      <!-- โลโก้ & ชื่อร้าน -->
+      <a href="#" class="flex items-center gap-3 group">
+        <div class="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden border-2 border-amber-400 shadow-sm group-hover:rotate-6 transition-transform">
+          <img src="assets/images/flavor_original.jpg" alt="โดมเบรคแตก โลโก้" class="w-full h-full object-cover">
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-extrabold text-lg sm:text-xl text-gray-900 leading-none">โดมเบรคแตก</h1>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">สูตรโฮมเมด</span>
+          </div>
+          <p class="text-xs text-amber-700 font-medium mt-0.5">DOME BREAK TAK • กล้วยเบรคแตกแท้ 100%</p>
+        </div>
+      </a>
+
+      <!-- เมนูติดต่อ & ปุ่มตะกร้า -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- LINE ID Badge (@448gijej) -->
+        <a href="https://line.me/R/ti/p/@448gijej" target="_blank" rel="noopener" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors">
+          <svg class="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.82 2 10.53c0 2.94 1.77 5.53 4.45 7.02-.19.67-.69 2.45-.79 2.82-.12.46.17.45.36.33.15-.1 2.41-1.63 3.39-2.3.82.16 1.68.25 2.59.25 5.52 0 10-3.82 10-8.53S17.52 2 12 2z"/></svg>
+          <span>LINE: @448gijej</span>
+        </a>
+
+        <!-- เบอร์โทรศัพท์ 091-8197286 -->
+        <a href="tel:0918197286" class="hidden md:flex items-center gap-1 text-xs font-bold text-gray-700 hover:text-amber-600 px-2.5 py-1.5">
+          <span>📞 091-8197286</span>
+        </a>
+
+        <!-- ปุ่มตะกร้า -->
+        <button onclick="openCartDrawer()" class="relative p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 transition-all active:scale-95 shadow-sm flex items-center gap-2">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          <span class="hidden sm:inline text-xs font-bold">ตะกร้า</span>
+          <span class="cart-count-badge hidden absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#EE4D2D] text-white text-[11px] font-extrabold flex items-center justify-center shadow-md">
+            0
+          </span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3. HERO BANNER -->
+  <section class="max-w-5xl mx-auto px-4 py-4 sm:py-6">
+    <div class="relative rounded-3xl overflow-hidden shadow-xl bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 text-white p-6 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="max-w-xl text-center md:text-left z-10">
+        <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold mb-3 border border-white/30">
+          <span>🍌 กล้วยเบรคแตกสูตรลับ โฮมเมดแท้</span>
+        </div>
+        <h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+          กล้วยเบรคแตก กรอบ บาง หอม มันส์<br class="hidden sm:inline"> ทานเพลิน...เบรคไม่อยู่!
+        </h2>
+        <p class="text-amber-100 text-sm sm:text-base mt-2.5 font-normal leading-relaxed">
+          คัดสรรกล้วยน้ำว้าคุณภาพ ทอดสดใหม่ ไม่อมน้ำมัน ไม่ใส่วัตถุกันเสีย กรุบกรอบกำลังดี มีให้เลือก 4 รสชาติ 2 ขนาดความจุใจ
+        </p>
+        
+        <!-- จุดเด่น 3 ข้อ -->
+        <div class="grid grid-cols-3 gap-2 mt-5 text-center">
+          <div class="bg-black/20 backdrop-blur-sm rounded-xl p-2.5 border border-white/10">
+            <div class="text-xl">🍌</div>
+            <div class="text-[11px] sm:text-xs font-bold mt-0.5">กล้วยแท้ 100%</div>
+          </div>
+          <div class="bg-black/20 backdrop-blur-sm rounded-xl p-2.5 border border-white/10">
+            <div class="text-xl">🍃</div>
+            <div class="text-[11px] sm:text-xs font-bold mt-0.5">ไม่อมน้ำมัน</div>
+          </div>
+          <div class="bg-black/20 backdrop-blur-sm rounded-xl p-2.5 border border-white/10">
+            <div class="text-xl">🚚</div>
+            <div class="text-[11px] sm:text-xs font-bold mt-0.5">จัดส่งทั่วไทย</div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex flex-wrap items-center justify-center md:justify-start gap-3">
+          <button onclick="document.getElementById('products-section').scrollIntoView({behavior: 'smooth'})" class="px-6 py-3 rounded-xl bg-white text-orange-600 font-extrabold text-sm hover:bg-amber-50 active:scale-95 transition-all shadow-lg shadow-black/10 flex items-center gap-2">
+            <span>สั่งซื้อเลย</span>
+            <span>👇</span>
+          </button>
+          <a href="https://line.me/R/ti/p/@448gijej" target="_blank" rel="noopener" class="px-5 py-3 rounded-xl bg-[#06C755] hover:bg-[#05B34C] text-white font-bold text-sm transition-all shadow-lg shadow-black/10 flex items-center gap-2">
+            <span>สอบถามทาง LINE</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- รูป Hero Showcase -->
+      <div class="relative w-48 h-48 sm:w-64 sm:h-64 flex-shrink-0">
+        <div class="absolute inset-0 bg-white/20 rounded-full blur-2xl"></div>
+        <img src="assets/images/product_small.jpg" alt="กล้วยเบรคแตกถุงเล็ก" class="relative z-10 w-full h-full object-cover rounded-2xl shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500 border-4 border-white/50">
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. PRODUCT CATALOG SECTION (ตารางสินค้า ถุงเล็ก & ถุงใหญ่) -->
+  <main id="products-section" class="max-w-5xl mx-auto px-4 py-6 flex-1">
+    <div class="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-6 pb-3 border-b border-amber-200/60 gap-2">
+      <div>
+        <div class="text-xs font-bold uppercase tracking-wider text-amber-700">เลือกขนาดที่ชอบ</div>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-0.5">🍌 รายการสินค้ากล้วยเบรคแตก</h2>
+      </div>
+      <p class="text-xs text-gray-500">
+        กดที่สินค้าเพื่อเลือกรสชาติ (ออริจินอล, หวาน, เค็ม, ปาปริก้า)
+      </p>
+    </div>
+
+    <!-- กริดสินค้า 2 ขนาด -->
+    <div id="products-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- ข้อมูลจะถูก render จาก products.js -->
+    </div>
+  </main>
+
+  <!-- 5. 4 FLAVORS SHOWCASE SECTION (แสดงโลโก้จริง 4 รสชาติ) -->
+  <section class="max-w-5xl mx-auto px-4 py-8">
+    <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-6 sm:p-8 border border-amber-200/80 shadow-sm">
+      <div class="text-center max-w-2xl mx-auto mb-6">
+        <span class="text-xs font-extrabold px-3 py-1 rounded-full bg-amber-200 text-amber-900">
+          ✨ มีให้เลือกฟินถึง 4 รสชาติ
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">
+          รสชาติความอร่อยสไตล์ "โดมเบรคแตก"
+        </h2>
+        <p class="text-xs sm:text-sm text-gray-600 mt-1.5">
+          กรอบ อร่อย เข้มข้นทุกแผ่น ติดต่อสอบถามได้ทาง LINE: <strong>@448gijej</strong> หรือโทร <strong>091-8197286</strong>
+        </p>
+      </div>
+
+      <div id="flavors-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <!-- ข้อมูลจะถูก render จาก products.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. FOOTER -->
+  <footer class="bg-amber-950 text-amber-200 mt-12 border-t border-amber-900">
+    <div class="max-w-5xl mx-auto px-4 py-10">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- ข้อมูลร้าน -->
+        <div>
+          <div class="flex items-center gap-3">
+            <img src="assets/images/flavor_original.jpg" alt="โดมเบรคแตก" class="w-11 h-11 rounded-full border-2 border-amber-400">
+            <div>
+              <h3 class="font-extrabold text-white text-base">โดมเบรคแตก (DOME BREAK TAK)</h3>
+              <p class="text-xs text-amber-400">สูตรลับกล้วยเบรคแตก หอม กรอบ สดใหม่</p>
+            </div>
+          </div>
+          <p class="text-xs text-amber-300/80 mt-3 leading-relaxed">
+            ผลิตจากกล้วยน้ำว้าคุณภาพแท้ 100% สด สะอาด ปลอดภัย ไม่ใส่วัตถุกันเสีย หวานกรอบธรรมชาติ สั่งทานเองหรือเป็นของฝากก็ถูกใจทุกคน
+          </p>
+        </div>
+
+        <!-- ติดต่อสั่งซื้อ -->
+        <div>
+          <h4 class="font-bold text-white text-sm uppercase tracking-wider mb-3">ช่องทางติดต่อ & สั่งซื้อ</h4>
+          <ul class="space-y-2 text-xs">
+            <li class="flex items-center gap-2">
+              <span class="text-emerald-400 text-base">💬</span>
+              <span>LINE Official: <a href="https://line.me/R/ti/p/@448gijej" target="_blank" class="text-emerald-300 font-bold underline">@448gijej</a></span>
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-base">📞</span>
+              <span>โทรศัพท์: <a href="tel:0918197286" class="text-amber-100 font-bold">091-8197286</a></span>
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-base">💳</span>
+              <span>พร้อมเพย์: <strong>คมชาญ จันทร์นาค</strong></span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- การจัดส่ง & เงื่อนไข -->
+        <div>
+          <h4 class="font-bold text-white text-sm uppercase tracking-wider mb-3">การจัดส่ง & เงื่อนไข</h4>
+          <ul class="space-y-2 text-xs text-amber-300/80">
+            <li>🎯 สั่งสะสมครบ 10 ถุง เปิดเตาทอดสดใหม่รอบพิเศษทันที</li>
+            <li>📦 ค่าจัดส่งเหมา 40 บาท (สั่งครบ 4 ถุง ส่งฟรี!)</li>
+            <li>🚚 แพ็คกันกระแทกอย่างดี กล้วยไม่แตกหักง่าย</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-8 pt-6 border-t border-amber-900 text-center text-xs text-amber-400/60">
+        &copy; 2026 DOME BREAK TAK (โดมเบรคแตก). สงวนลิขสิทธิ์ทุกประการ.
+      </div>
+    </div>
+  </footer>
+
+  <!-- 7. SHOPEE VARIANT SELECTOR BOTTOM SHEET / MODAL -->
+  <div id="variant-modal" class="hidden fixed inset-0 z-50 transition-opacity duration-300 opacity-0">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeShopeeVariantModal()"></div>
+
+    <div class="absolute bottom-0 inset-x-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden transform translate-y-full transition-transform duration-300 ease-out" id="variant-drawer-content">
+      
+      <!-- Modal Header (Shopee Style) -->
+      <div class="p-4 sm:p-5 border-b border-gray-100 flex items-start gap-4">
+        <!-- Thumbnail -->
+        <div class="w-24 h-24 rounded-full overflow-hidden border-2 border-amber-200 bg-amber-50 flex-shrink-0 shadow-md">
+          <img id="modal-product-img" src="assets/images/flavor_original.jpg" alt="รสชาติที่เลือก" class="w-full h-full object-cover">
+        </div>
+
+        <!-- Title & Dynamic Price -->
+        <div class="flex-1 min-w-0">
+          <div class="text-xs text-gray-500">ราคาตามรสชาติที่เลือก</div>
+          <div class="text-2xl sm:text-3xl font-extrabold text-[#EE4D2D]" id="modal-unit-price">
+            ฿45
+          </div>
+          <div class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md inline-block mt-1">
+            พร้อมส่ง • สดใหม่ทุกวัน
+          </div>
+        </div>
+
+        <!-- Close Button -->
+        <button onclick="closeShopeeVariantModal()" class="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-5 flex-1">
+        <!-- 1. เลือกขนาด -->
+        <div>
+          <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">
+            1. เลือกขนาดบรรจุ:
+          </label>
+          <div id="modal-size-options" class="grid grid-cols-2 gap-2">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- 2. เลือกรสชาติ (Shopee Chips) -->
+        <div>
+          <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">
+            2. เลือกรสชาติ:
+          </label>
+          <div id="modal-flavor-options" class="grid grid-cols-2 gap-2">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- 3. จำนวนถุง -->
+        <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+          <div>
+            <div class="text-xs font-bold text-gray-800 uppercase tracking-wider">3. จำนวน (ถุง)</div>
+            <div class="text-[11px] text-gray-400">คำนวณสะสมในแถบภารกิจทันที</div>
+          </div>
+          <div class="flex items-center border-2 border-amber-200 rounded-xl overflow-hidden bg-amber-50/50">
+            <button type="button" onclick="adjustModalQty(-1)" class="w-9 h-9 flex items-center justify-center text-lg font-bold text-gray-700 hover:bg-amber-200 transition-colors">-</button>
+            <input type="text" id="modal-qty-input" value="1" readonly class="w-12 h-9 text-center font-extrabold text-sm bg-transparent border-x border-amber-200 focus:outline-none">
+            <button type="button" onclick="adjustModalQty(1)" class="w-9 h-9 flex items-center justify-center text-lg font-bold text-gray-700 hover:bg-amber-200 transition-colors">+</button>
+          </div>
+        </div>
+
+        <!-- ยอดรวมรายการนี้ -->
+        <div class="bg-amber-50 p-3 rounded-2xl flex items-center justify-between border border-amber-200">
+          <span class="text-xs font-bold text-amber-900">ยอดรวมสินค้านี้:</span>
+          <span id="modal-subtotal-price" class="text-xl font-extrabold text-[#EE4D2D]">฿45</span>
+        </div>
+      </div>
+
+      <!-- Modal Actions (Shopee Style Buttons) -->
+      <div class="p-4 border-t border-gray-100 bg-gray-50 flex gap-2.5">
+        <!-- เพิ่มลงตะกร้า -->
+        <button onclick="handleAddToCart(false)" class="flex-1 py-3 px-4 rounded-xl font-bold text-[#EE4D2D] bg-[#EE4D2D]/10 hover:bg-[#EE4D2D]/20 border border-[#EE4D2D]/30 transition-all active:scale-95 text-sm flex items-center justify-center gap-1.5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          <span>เพิ่มลงตะกร้า</span>
+        </button>
+
+        <!-- ซื้อทันที -->
+        <button onclick="handleAddToCart(true)" class="flex-1 py-3 px-4 rounded-xl font-extrabold text-white shopee-badge hover:opacity-95 shadow-lg shadow-orange-500/20 transition-all active:scale-95 text-sm flex items-center justify-center gap-1.5">
+          <span>⚡ ซื้อทันที</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. CART DRAWER (ตะกร้าสินค้าแบบสไลด์ข้าง) -->
+  <div id="cart-drawer" class="hidden fixed inset-0 z-50 transition-opacity duration-300 opacity-0">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeCartDrawer()"></div>
+    <div class="absolute top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-out" id="cart-drawer-content">
+      
+      <!-- Cart Header -->
+      <div class="p-4 border-b border-gray-100 flex items-center justify-between bg-amber-50">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🛒</span>
+          <h3 class="font-extrabold text-gray-900 text-base">ตะกร้าสินค้าของคุณ</h3>
+        </div>
+        <button onclick="closeCartDrawer()" class="p-1 rounded-full text-gray-400 hover:text-gray-700">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Cart Items List -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-3" id="cart-items-container">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Empty Cart State -->
+      <div id="cart-empty-state" class="hidden flex-1 flex flex-col items-center justify-center p-6 text-center text-gray-400">
+        <span class="text-5xl mb-3">🍌</span>
+        <div class="font-bold text-gray-700">ตะกร้ายังว่างเปล่า</div>
+        <p class="text-xs text-gray-400 mt-1">ยังไม่มีกล้วยเบรคแตกในตะกร้า เลือกช้อปได้เลย!</p>
+        <button onclick="closeCartDrawer()" class="mt-4 px-4 py-2 rounded-xl bg-amber-500 text-white font-bold text-xs shadow-md">
+          เลือกดูสินค้า
+        </button>
+      </div>
+
+      <!-- Cart Summary & Checkout Button -->
+      <div id="cart-summary-section" class="p-4 border-t border-gray-100 bg-gray-50 space-y-3">
+        <div id="cart-free-shipping-badge" class="text-center"></div>
+
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between text-gray-600">
+            <span>จำนวนทั้งหมด:</span>
+            <span id="cart-total-bags" class="font-bold text-gray-900">0 ถุง</span>
+          </div>
+          <div class="flex justify-between text-gray-600">
+            <span>รวมค่าสินค้า:</span>
+            <span id="cart-subtotal" class="font-bold text-gray-900">฿0</span>
+          </div>
+          <div class="flex justify-between text-gray-600">
+            <span>ค่าจัดส่ง (เหมา):</span>
+            <span id="cart-shipping" class="font-bold text-emerald-600">฿40</span>
+          </div>
+          <div class="flex justify-between text-sm font-extrabold text-gray-900 pt-2 border-t border-gray-200">
+            <span>ยอดชำระสุทธิ:</span>
+            <span id="cart-grand-total" class="text-xl text-[#EE4D2D]">฿0</span>
+          </div>
+        </div>
+
+        <button onclick="openCheckoutModal()" class="w-full py-3 px-4 rounded-xl font-extrabold text-white shopee-badge hover:opacity-95 shadow-lg shadow-orange-500/20 active:scale-95 transition-all text-sm flex items-center justify-center gap-2">
+          <span>ดำเนินการชำระเงิน</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. CHECKOUT & PROMPTPAY QR MODAL -->
+  <div id="checkout-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-6 border border-amber-200">
+      
+      <!-- Checkout Header -->
+      <div class="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-4 sm:p-5 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">💳</span>
+          <h3 class="font-extrabold text-base sm:text-lg">ชำระเงินผ่านพร้อมเพย์ QR</h3>
+        </div>
+        <button onclick="closeCheckoutModal()" class="p-1 rounded-full text-white/80 hover:text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5 sm:p-6 overflow-y-auto max-h-[80vh] space-y-5">
+        <!-- สรุปรายการย่อ -->
+        <div class="bg-amber-50/70 p-3 rounded-2xl border border-amber-100">
+          <div class="text-xs font-bold text-amber-900 mb-1">📦 รายการในคำสั่งซื้อ:</div>
+          <div id="checkout-items-summary" class="space-y-0.5"></div>
+          <div class="flex justify-between items-center text-sm font-extrabold text-gray-900 pt-2 mt-2 border-t border-amber-200">
+            <span>ยอดที่ต้องชำระ:</span>
+            <span class="checkout-grand-total text-xl text-[#EE4D2D]">฿0.00</span>
+          </div>
+        </div>
+
+        <!-- ข้อมูลผู้รับ -->
+        <div class="space-y-3">
+          <h4 class="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+            <span>📍 ข้อมูลที่อยู่จัดส่ง</span>
+          </h4>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">ชื่อ - นามสกุล ผู้รับ *</label>
+            <input type="text" id="customer-name" placeholder="เช่น สมชาย ใจดี" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">เบอร์โทรศัพท์ติดต่อ *</label>
+            <input type="tel" id="customer-phone" placeholder="เช่น 0891234567" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">ที่อยู่จัดส่งโดยละเอียด พร้อมรหัสไปรษณีย์ *</label>
+            <textarea id="customer-address" rows="2" placeholder="บ้านเลขที่, ถนน, ตำบล, อำเภอ, จังหวัด, รหัสไปรษณีย์" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">หมายเหตุถึงร้านค้า (ถ้ามี)</label>
+            <input type="text" id="customer-note" placeholder="เช่น ฝากไว้ที่ป้อมยาม, โทรแจ้งก่อนส่ง" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400">
+          </div>
+        </div>
+
+        <!-- ส่วนสแกน QR PromptPay -->
+        <div class="bg-gradient-to-b from-teal-50 to-emerald-50 p-4 rounded-2xl border-2 border-teal-200 text-center">
+          <div class="flex items-center justify-center gap-1.5 text-teal-800 font-bold text-xs mb-2">
+            <svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+            <span>สแกนจ่ายผ่านแอปธนาคารทุกแห่ง</span>
+          </div>
+
+          <!-- รูปภาพ QR Code จากผู้ใช้ -->
+          <div class="relative w-52 mx-auto bg-white p-2 rounded-2xl shadow-md border border-teal-100">
+            <img src="assets/images/promptpay_qr.jpg" alt="PromptPay QR คมชาญ จันทร์นาค" class="w-full h-auto rounded-xl">
+          </div>
+
+          <!-- รายละเอียดบัญชี -->
+          <div class="mt-3">
+            <div class="text-xs text-gray-500">ชื่อบัญชีพร้อมเพย์</div>
+            <div class="font-extrabold text-sm text-gray-900">คมชาญ จันทร์นาค</div>
+            <div class="text-[11px] text-gray-500 mt-0.5">
+              รหัสอ้างอิง: <span class="font-mono font-bold text-teal-700">08898400053911</span>
+              <button onclick="copyRefNo()" class="ml-1 text-teal-600 underline">คัดลอก</button>
+            </div>
+          </div>
+
+          <!-- กล่องยอดเงินที่ต้องโอน -->
+          <div class="mt-3 p-2.5 bg-white rounded-xl border border-teal-200 flex items-center justify-between">
+            <div class="text-left">
+              <span class="text-[11px] text-gray-500">ยอดโอนสุทธิ</span>
+              <div class="checkout-grand-total text-xl font-extrabold text-[#EE4D2D]">฿0.00</div>
+            </div>
+            <button type="button" onclick="copyAmount()" class="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow transition-colors">
+              📋 คัดลอกยอดเงิน
+            </button>
+          </div>
+        </div>
+
+        <!-- แนบสลิปการโอนเงิน -->
+        <div>
+          <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-1.5">
+            📎 แนบสลิปการโอนเงิน (ถ้ามี)
+          </label>
+          
+          <div id="slip-upload-prompt" class="border-2 border-dashed border-gray-300 rounded-2xl p-4 text-center hover:border-amber-400 transition-colors cursor-pointer bg-gray-50 relative">
+            <input type="file" id="slip-file-input" accept="image/*" onchange="handleSlipUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer">
+            <svg class="w-8 h-8 text-gray-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <div class="text-xs font-bold text-gray-700">แตะเพื่อเลือกรูปภาพสลิป</div>
+            <div class="text-[10px] text-gray-400 mt-0.5">หรือจะส่งสลิปผ่านทาง LINE ในขั้นตอนถัดไปก็ได้เช่นกันครับ</div>
+          </div>
+
+          <!-- Preview สลิป -->
+          <div id="slip-preview-container" class="hidden relative rounded-2xl overflow-hidden border-2 border-emerald-400 bg-black/5 p-2">
+            <img id="slip-preview-img" src="" alt="สลิปโอนเงิน" class="max-h-48 mx-auto rounded-lg object-contain">
+            <div class="mt-2 flex items-center justify-between px-2">
+              <span class="text-xs font-bold text-emerald-700">✅ แนบสลิปเรียบร้อย</span>
+              <button type="button" onclick="removeSlip()" class="text-xs text-rose-600 underline">เปลี่ยนรูป</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ปุ่มยืนยันสั่งซื้อ -->
+        <div class="pt-2">
+          <button type="button" onclick="handleOrderSubmit()" class="w-full py-3.5 px-4 rounded-xl font-extrabold text-white line-btn hover:opacity-95 shadow-xl shadow-green-600/20 active:scale-95 transition-all text-sm flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.82 2 10.53c0 2.94 1.77 5.53 4.45 7.02-.19.67-.69 2.45-.79 2.82-.12.46.17.45.36.33.15-.1 2.41-1.63 3.39-2.3.82.16 1.68.25 2.59.25 5.52 0 10-3.82 10-8.53S17.52 2 12 2z"/></svg>
+            <span>ยืนยันการสั่งซื้อและแจ้งทาง LINE</span>
+          </button>
+          <div class="text-[11px] text-gray-400 text-center mt-2">
+            ระบบจะเปิด LINE Official <strong>@448gijej</strong> พร้อมส่งรายละเอียดออเดอร์ให้ร้านค้าทันที
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. ORDER SUCCESS MODAL -->
+  <div id="order-success-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-md p-4 flex items-center justify-center">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden text-center p-6 border border-emerald-200">
+      
+      <div class="w-20 h-20 mx-auto rounded-full bg-emerald-100 flex items-center justify-center text-4xl mb-4 animate-bounce">
+        🎉
+      </div>
+
+      <span class="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800">
+        สั่งซื้อสำเร็จเรียบร้อย!
+      </span>
+
+      <h3 class="text-2xl font-extrabold text-gray-900 mt-2">
+        ขอบคุณที่อุดหนุนโดมเบรคแตก
+      </h3>
+
+      <p class="text-xs text-gray-500 mt-1">
+        ออเดอร์หมายเลข <span id="success-order-id" class="font-bold text-gray-900 font-mono">#BT-0000</span> ได้รับการบันทึกแล้ว
+      </p>
+
+      <!-- บิลสรุป -->
+      <div class="mt-4 p-4 bg-gray-50 rounded-2xl text-left text-xs space-y-1.5 border border-gray-100">
+        <div class="flex justify-between">
+          <span class="text-gray-500">ผู้สั่ง:</span>
+          <span id="success-customer-name" class="font-bold text-gray-800">คุณ...</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">เบอร์โทร:</span>
+          <span id="success-phone" class="font-bold text-gray-800">-</span>
+        </div>
+        <div class="flex justify-between text-sm font-extrabold pt-2 border-t border-gray-200 text-gray-900">
+          <span>ยอดรวม:</span>
+          <span id="success-grand-total" class="text-[#EE4D2D]">฿0</span>
+        </div>
+      </div>
+
+      <!-- ปุ่มเปิดแจ้งเตือนทาง LINE -->
+      <div class="mt-6 space-y-2.5">
+        <button onclick="sendOrderToLine()" class="w-full py-3.5 px-4 rounded-xl font-extrabold text-white line-btn hover:opacity-95 shadow-xl shadow-green-600/20 active:scale-95 transition-all text-sm flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.82 2 10.53c0 2.94 1.77 5.53 4.45 7.02-.19.67-.69 2.45-.79 2.82-.12.46.17.45.36.33.15-.1 2.41-1.63 3.39-2.3.82.16 1.68.25 2.59.25 5.52 0 10-3.82 10-8.53S17.52 2 12 2z"/></svg>
+          <span>เปิดแชทแจ้งเตือนทาง LINE (@448gijej)</span>
+        </button>
+
+        <button onclick="closeOrderSuccessModal()" class="w-full py-2.5 px-4 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors text-xs">
+          กลับสู่หน้าหลัก
+        </button>
+      </div>
+
+      <p class="text-[11px] text-gray-400 mt-3">
+        *ข้อความสรุปออเดอร์ถูกคัดลอกลงคลิปบอร์ดแล้ว สามารถกดวาง (Paste) ในแชท LINE ได้ทันทีครับ
+      </p>
+
+    </div>
+  </div>
+
+  <!-- 11. TOAST NOTIFICATION -->
+  <div id="app-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-full shadow-2xl border border-white/20 text-xs font-semibold flex items-center gap-2 transform translate-y-24 opacity-0 transition-all duration-300">
+    <span>🍌</span>
+    <span id="toast-message">แจ้งเตือน</span>
+  </div>
+
+  <!-- Scripts -->
+  <script src="assets/js/products.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
