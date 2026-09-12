@@ -487,21 +487,40 @@ function removeCartItem(index) {
   }
 }
 
-// หน้าชำระเงิน พร้อมเพย์ QR
-function openCheckoutModal() {
-  closeCartDrawer();
-  if (state.cart.length === 0) {
-    showToast('กรุณาเลือกสินค้าใส่ตะกร้าก่อนชำระเงิน');
-    return;
+// จัดการเปลี่ยนรูปแบบการจัดส่ง (ออฟฟิศ vs ทางอื่นๆ)
+function handleDeliveryMethodChange(method) {
+  state.deliveryMethod = method;
+  
+  const officeCard = document.getElementById('delivery-card-office');
+  const otherCard = document.getElementById('delivery-card-other');
+  const otherFields = document.getElementById('other-delivery-fields');
+  
+  if (method === 'office') {
+    if (officeCard) {
+      officeCard.className = "relative flex items-center gap-3 p-3 rounded-2xl border-2 border-emerald-500 bg-emerald-50/70 cursor-pointer transition-all shadow-sm";
+    }
+    if (otherCard) {
+      otherCard.className = "relative flex items-center gap-3 p-3 rounded-2xl border-2 border-gray-200 bg-white cursor-pointer hover:border-amber-300 transition-all";
+    }
+    if (otherFields) otherFields.classList.add('hidden');
+  } else {
+    if (officeCard) {
+      officeCard.className = "relative flex items-center gap-3 p-3 rounded-2xl border-2 border-gray-200 bg-white cursor-pointer hover:border-emerald-300 transition-all";
+    }
+    if (otherCard) {
+      otherCard.className = "relative flex items-center gap-3 p-3 rounded-2xl border-2 border-[#EE4D2D] bg-orange-50/70 cursor-pointer transition-all shadow-sm";
+    }
+    if (otherFields) otherFields.classList.remove('hidden');
   }
+  
+  updateCheckoutSummary();
+}
 
-  const modal = document.getElementById('checkout-modal');
-  if (!modal) return;
-
-  const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+// อัปเดตสรุปยอดและค่าจัดส่งในหน้าชำระเงิน
+function updateCheckoutSummary() {
   const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-  const isFreeShipping = totalBags >= SHOP_CONFIG.freeShippingBags;
-  const shippingFee = isFreeShipping ? 0 : SHOP_CONFIG.shippingRate;
+  const isOffice = (state.deliveryMethod || 'office') === 'office';
+  const shippingFee = isOffice ? 0 : 50;
   const grandTotal = itemsSubtotal + shippingFee;
 
   const amountDisplays = document.querySelectorAll('.checkout-grand-total');
@@ -521,14 +540,36 @@ function openCheckoutModal() {
         <span>รวมค่าสินค้า:</span>
         <span class="font-semibold text-gray-700">฿${itemsSubtotal}</span>
       </div>
-      <div class="flex justify-between text-xs py-1 text-gray-500">
+      <div class="flex justify-between text-xs py-1 text-gray-500 items-center">
         <span>ค่าจัดส่ง:</span>
-        <span class="font-semibold ${isFreeShipping ? 'text-emerald-600' : 'text-gray-700'}">${isFreeShipping ? 'ส่งฟรี!' : '฿' + shippingFee}</span>
+        <div>
+          ${isOffice 
+            ? `<span class="line-through text-gray-400 mr-1.5">฿50</span><span class="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">ฟรี! (จัดส่งที่ออฟฟิศ)</span>`
+            : `<span class="font-bold text-[#EE4D2D] bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">฿50 (จัดส่งทางอื่น ๆ)</span>`
+          }
+        </div>
       </div>
     `;
 
     orderList.innerHTML = itemsHtml + shippingRowHtml;
   }
+}
+
+// หน้าชำระเงิน พร้อมเพย์ QR
+function openCheckoutModal() {
+  closeCartDrawer();
+  if (state.cart.length === 0) {
+    showToast('กรุณาเลือกสินค้าใส่ตะกร้าก่อนชำระเงิน');
+    return;
+  }
+
+  const modal = document.getElementById('checkout-modal');
+  if (!modal) return;
+
+  state.deliveryMethod = 'office';
+  const officeRadio = document.querySelector('input[name="delivery-method"][value="office"]');
+  if (officeRadio) officeRadio.checked = true;
+  handleDeliveryMethodChange('office');
 
   modal.classList.remove('hidden');
 }
@@ -539,21 +580,15 @@ function closeCheckoutModal() {
 }
 
 function copyAmount() {
-  const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
   const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-  const shippingFee = totalBags >= SHOP_CONFIG.freeShippingBags ? 0 : SHOP_CONFIG.shippingRate;
+  const isOffice = (state.deliveryMethod || 'office') === 'office';
+  const shippingFee = isOffice ? 0 : 50;
   const grandTotal = (itemsSubtotal + shippingFee).toFixed(2);
 
   navigator.clipboard.writeText(grandTotal).then(() => {
     showToast(`คัดลอกยอดเงิน ฿${grandTotal} เรียบร้อยแล้ว`);
   }).catch(() => {
     showToast(`ยอดเงิน: ฿${grandTotal}`);
-  });
-}
-
-function copyRefNo() {
-  navigator.clipboard.writeText(SHOP_CONFIG.promptPay.refNo).then(() => {
-    showToast('คัดลอกรหัสอ้างอิงพร้อมเพย์แล้ว');
   });
 }
 
@@ -595,25 +630,32 @@ function handleOrderSubmit(e) {
   const addressInput = document.getElementById('customer-address');
   const noteInput = document.getElementById('customer-note');
 
+  // ชื่อ นามสกุล ผู้รับ required อย่างเดียวพอ!
   if (!nameInput.value.trim()) {
-    alert('กรุณากรอกชื่อผู้รับ');
+    alert('กรุณากรอกชื่อ - นามสกุล ผู้รับ');
     nameInput.focus();
     return;
   }
-  if (!phoneInput.value.trim()) {
-    alert('กรุณากรอกเบอร์โทรศัพท์ติดต่อ');
-    phoneInput.focus();
-    return;
-  }
-  if (!addressInput.value.trim()) {
-    alert('กรุณากรอกที่อยู่จัดส่ง');
-    addressInput.focus();
-    return;
+
+  const isOffice = (state.deliveryMethod || 'office') === 'office';
+
+  // หากเลือกจัดส่งทางอื่น ๆ จึงจะบังคับกรอกเบอร์โทรและที่อยู่
+  if (!isOffice) {
+    if (!phoneInput.value.trim()) {
+      alert('กรุณากรอกเบอร์โทรศัพท์ติดต่อสำหรับการจัดส่ง');
+      phoneInput.focus();
+      return;
+    }
+    if (!addressInput.value.trim()) {
+      alert('กรุณากรอกที่อยู่จัดส่งโดยละเอียด');
+      addressInput.focus();
+      return;
+    }
   }
 
   const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
   const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-  const shippingFee = totalBags >= SHOP_CONFIG.freeShippingBags ? 0 : SHOP_CONFIG.shippingRate;
+  const shippingFee = isOffice ? 0 : 50;
   const grandTotal = itemsSubtotal + shippingFee;
 
   const orderId = 'BT-' + Math.floor(1000 + Math.random() * 9000);
@@ -626,16 +668,18 @@ function handleOrderSubmit(e) {
   // สร้างข้อความสรุปเพื่อส่งเข้า LINE Official @448gijej
   const orderItemsText = state.cart.map(i => `- ${i.sizeLabel} (${i.flavorName}) x ${i.quantity} ถุง (${i.unitPrice * i.quantity} บ.)`).join('\n');
   const slipNote = state.slipDataUrl ? '(แนบสลิปโอนเงินผ่านระบบแล้ว)' : '(รบกวนส่งสลิปโอนเงินในแชทนี้)';
+  const deliveryLabel = isOffice ? '🏢 จัดส่งที่ออฟฟิศ (ส่งฟรี)' : '🚚 จัดส่งทางอื่น ๆ (เหมา 50 บ.)';
+
+  let customerDetailsText = `ชื่อ: ${nameInput.value.trim()}\nรูปแบบ: ${deliveryLabel}\n`;
+  if (phoneInput && phoneInput.value.trim()) customerDetailsText += `เบอร์โทร: ${phoneInput.value.trim()}\n`;
+  if (addressInput && addressInput.value.trim()) customerDetailsText += `ที่อยู่: ${addressInput.value.trim()}\n`;
+  if (noteInput && noteInput.value.trim()) customerDetailsText += `หมายเหตุ: ${noteInput.value.trim()}\n`;
 
   const lineMessage = `🍌 ยืนยันคำสั่งซื้อ กล้วยเบรคแตก [ออเดอร์ #${orderId}] 🍌\n\n` +
-    `👤 ข้อมูลผู้สั่งซื้อ:\n` +
-    `ชื่อ: ${nameInput.value.trim()}\n` +
-    `เบอร์โทร: ${phoneInput.value.trim()}\n` +
-    `ที่อยู่จัดส่ง: ${addressInput.value.trim()}\n` +
-    (noteInput.value.trim() ? `หมายเหตุ: ${noteInput.value.trim()}\n` : '') +
-    `\n📦 รายการสินค้า:\n${orderItemsText}\n\n` +
+    `👤 ข้อมูลผู้สั่งซื้อ:\n${customerDetailsText}\n` +
+    `📦 รายการสินค้า:\n${orderItemsText}\n\n` +
     `รวมค่าสินค้า: ฿${itemsSubtotal}\n` +
-    `ค่าจัดส่ง: ${shippingFee === 0 ? 'ส่งฟรี!' : '฿' + shippingFee}\n` +
+    `ค่าจัดส่ง: ${isOffice ? 'ฟรี! (ส่งที่ออฟฟิศ)' : '฿50'}\n` +
     `💰 ยอดโอนสุทธิ: ฿${grandTotal}\n` +
     `สถานะ: ${slipNote}\n\n` +
     `ขอบคุณที่อุดหนุนโดมเบรคแตกครับ!`;
@@ -643,8 +687,8 @@ function handleOrderSubmit(e) {
   state.currentOrder = {
     orderId,
     customerName: nameInput.value.trim(),
-    phone: phoneInput.value.trim(),
-    address: addressInput.value.trim(),
+    phone: (phoneInput && phoneInput.value.trim()) || 'จัดส่งที่ออฟฟิศ',
+    address: isOffice ? 'จัดส่งที่ออฟฟิศ' : (addressInput && addressInput.value.trim()),
     totalBags,
     grandTotal,
     lineMessage

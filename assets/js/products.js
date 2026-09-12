@@ -8,14 +8,15 @@ const SHOP_CONFIG = {
   lineUrl: "https://line.me/R/ti/p/@448gijej",
   promptPay: {
     accountName: "คมชาญ จันทร์นาค",
-    refNo: "08898400053911",
     qrImage: "assets/images/promptpay_qr.jpg"
   },
   logoImage: "assets/images/main_logo.jpg",
   missionTargetBags: 10,
   initialSimulatedBags: 7, // ยอดสะสมตั้งต้น (7/10 ถุง) ให้เห็นแถบภารกิจใกล้สำเร็จ
-  shippingRate: 40,        // ค่าจัดส่งปกติ
-  freeShippingBags: 4      // สั่งครบ 4 ถุง ส่งฟรี!
+  deliveryOptions: {
+    office: { id: "office", name: "จัดส่งที่ออฟฟิศ", fee: 0, label: "ส่งฟรี!" },
+    other: { id: "other", name: "จัดส่งทางอื่น ๆ", fee: 50, label: "เหมาจ่าย 50 บาท" }
+  }
 };
 
 // ข้อมูลรสชาติทั้ง 4 รสชาติ (ใช้รูปโลโก้จริงจากทางร้าน)

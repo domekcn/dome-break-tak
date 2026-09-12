@@ -442,59 +442,90 @@
           </div>
         </div>
 
-        <!-- ข้อมูลผู้รับ -->
-        <div class="space-y-3">
-          <h4 class="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-            <span>📍 ข้อมูลที่อยู่จัดส่ง</span>
-          </h4>
+        <!-- ข้อมูลผู้รับ & ตัวเลือกการจัดส่ง -->
+        <div class="space-y-4">
           <div>
-            <label class="block text-xs text-gray-600 mb-1">ชื่อ - นามสกุล ผู้รับ *</label>
-            <input type="text" id="customer-name" placeholder="เช่น สมชาย ใจดี" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400">
+            <label class="block text-xs font-bold text-gray-700 mb-1">ชื่อ - นามสกุล ผู้รับ <span class="text-rose-500">*</span></label>
+            <input type="text" id="customer-name" placeholder="เช่น สมชาย ใจดี" class="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400 font-medium">
           </div>
+
+          <!-- ตัวเลือกรูปแบบการจัดส่ง (Radio Buttons) -->
           <div>
-            <label class="block text-xs text-gray-600 mb-1">เบอร์โทรศัพท์ติดต่อ *</label>
-            <input type="tel" id="customer-phone" placeholder="เช่น 0891234567" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400">
+            <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">
+              🚚 เลือกรูปแบบการจัดส่ง:
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <!-- ตัวเลือก 1: จัดส่งที่ออฟฟิศ (ส่งฟรี) -->
+              <label id="delivery-card-office" class="relative flex items-center gap-3 p-3 rounded-2xl border-2 border-emerald-500 bg-emerald-50/70 cursor-pointer transition-all shadow-sm">
+                <input type="radio" name="delivery-method" value="office" checked onchange="handleDeliveryMethodChange('office')" class="w-4 h-4 text-emerald-600 focus:ring-emerald-500">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-sm font-extrabold text-gray-900">🏢 จัดส่งที่ออฟฟิศ</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">ส่งฟรี!</span>
+                  </div>
+                  <p class="text-[11px] text-emerald-800 mt-0.5">จัดส่งฟรีถึงที่ทำงาน</p>
+                </div>
+              </label>
+
+              <!-- ตัวเลือก 2: จัดส่งทางอื่น ๆ (เหมา 50 บาท) -->
+              <label id="delivery-card-other" class="relative flex items-center gap-3 p-3 rounded-2xl border-2 border-gray-200 bg-white cursor-pointer hover:border-amber-300 transition-all">
+                <input type="radio" name="delivery-method" value="other" onchange="handleDeliveryMethodChange('other')" class="w-4 h-4 text-[#EE4D2D] focus:ring-orange-500">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-sm font-bold text-gray-900">🚚 จัดส่งทางอื่น ๆ</span>
+                    <span class="text-[11px] font-bold text-[#EE4D2D] bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">+฿50</span>
+                  </div>
+                  <p class="text-[11px] text-gray-500 mt-0.5">จัดส่งด่วนถึงบ้าน (เหมาจ่าย)</p>
+                </div>
+              </label>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs text-gray-600 mb-1">ที่อยู่จัดส่งโดยละเอียด พร้อมรหัสไปรษณีย์ *</label>
-            <textarea id="customer-address" rows="2" placeholder="บ้านเลขที่, ถนน, ตำบล, อำเภอ, จังหวัด, รหัสไปรษณีย์" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400"></textarea>
+
+          <!-- ช่องกรอกเบอร์โทรและที่อยู่ (แสดงเมื่อเลือก "จัดส่งทางอื่น ๆ") -->
+          <div id="other-delivery-fields" class="hidden space-y-3 p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 transition-all">
+            <div>
+              <label class="block text-xs font-bold text-gray-700 mb-1">เบอร์โทรศัพท์ติดต่อ <span class="text-rose-500">*</span></label>
+              <input type="tel" id="customer-phone" placeholder="เช่น 0891234567" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-700 mb-1">ที่อยู่จัดส่งโดยละเอียด พร้อมรหัสไปรษณีย์ <span class="text-rose-500">*</span></label>
+              <textarea id="customer-address" rows="2" placeholder="บ้านเลขที่, ถนน, ตำบล, อำเภอ, จังหวัด, รหัสไปรษณีย์" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"></textarea>
+            </div>
           </div>
+
+          <!-- หมายเหตุ (แสดงเสมอ) -->
           <div>
-            <label class="block text-xs text-gray-600 mb-1">หมายเหตุถึงร้านค้า (ถ้ามี)</label>
-            <input type="text" id="customer-note" placeholder="เช่น ฝากไว้ที่ป้อมยาม, โทรแจ้งก่อนส่ง" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400">
+            <label class="block text-xs text-gray-600 mb-1">หมายเหตุถึงร้านค้า (ถ้ามี เช่น ชื่อโต๊ะ/แผนก/อาคาร)</label>
+            <input type="text" id="customer-note" placeholder="เช่น แผนกบัญชี ชั้น 3 หรือ ฝากที่ป้อมยาม" class="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400">
           </div>
         </div>
 
-        <!-- ส่วนสแกน QR PromptPay -->
-        <div class="bg-gradient-to-b from-teal-50 to-emerald-50 p-4 rounded-2xl border-2 border-teal-200 text-center">
-          <div class="flex items-center justify-center gap-1.5 text-teal-800 font-bold text-xs mb-2">
-            <svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+        <!-- ส่วนสแกน QR PromptPay (Clean white, no cyan border, no ref number) -->
+        <div class="bg-gray-50 p-4 sm:p-5 rounded-2xl border border-gray-200 text-center">
+          <div class="flex items-center justify-center gap-1.5 text-gray-700 font-bold text-xs mb-3">
+            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
             <span>สแกนจ่ายผ่านแอปธนาคารทุกแห่ง</span>
           </div>
 
-          <!-- รูปภาพ QR Code จากผู้ใช้ -->
-          <div class="relative w-52 mx-auto bg-white p-2 rounded-2xl shadow-md border border-teal-100">
-            <img src="assets/images/promptpay_qr.jpg" alt="PromptPay QR คมชาญ จันทร์นาค" class="w-full h-auto rounded-xl">
+          <!-- รูปภาพ QR Code ชัดๆ พื้นหลังขาว ไม่มีกรอบสีฟ้า -->
+          <div class="w-56 mx-auto bg-white p-3 rounded-2xl shadow-sm border border-gray-200 flex items-center justify-center">
+            <img src="assets/images/promptpay_qr.jpg" alt="PromptPay QR คมชาญ จันทร์นาค" class="w-full h-auto object-contain">
           </div>
 
-          <!-- รายละเอียดบัญชี -->
+          <!-- รายละเอียดบัญชี (แสดงชื่อบัญชี ถูกต้องแล้ว และเอาเลขอ้างอิงออก) -->
           <div class="mt-3">
             <div class="text-xs text-gray-500">ชื่อบัญชีพร้อมเพย์</div>
-            <div class="font-extrabold text-sm text-gray-900">คมชาญ จันทร์นาค</div>
-            <div class="text-[11px] text-gray-500 mt-0.5">
-              รหัสอ้างอิง: <span class="font-mono font-bold text-teal-700">08898400053911</span>
-              <button onclick="copyRefNo()" class="ml-1 text-teal-600 underline">คัดลอก</button>
-            </div>
+            <div class="font-extrabold text-base text-gray-900">คมชาญ จันทร์นาค</div>
           </div>
 
           <!-- กล่องยอดเงินที่ต้องโอน -->
-          <div class="mt-3 p-2.5 bg-white rounded-xl border border-teal-200 flex items-center justify-between">
+          <div class="mt-3.5 p-3 bg-white rounded-xl border border-gray-200 flex items-center justify-between shadow-sm">
             <div class="text-left">
               <span class="text-[11px] text-gray-500">ยอดโอนสุทธิ</span>
-              <div class="checkout-grand-total text-xl font-extrabold text-[#EE4D2D]">฿0.00</div>
+              <div class="checkout-grand-total text-2xl font-extrabold text-[#EE4D2D]">฿0.00</div>
             </div>
-            <button type="button" onclick="copyAmount()" class="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow transition-colors">
-              📋 คัดลอกยอดเงิน
+            <button type="button" onclick="copyAmount()" class="px-3.5 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold text-xs shadow transition-colors flex items-center gap-1.5">
+              <span>📋 คัดลอกยอดเงิน</span>
             </button>
           </div>
         </div>
