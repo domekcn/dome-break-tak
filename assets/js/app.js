@@ -62,7 +62,9 @@ function loadSavedState() {
     const savedMission = localStorage.getItem('dbt_mission');
     if (savedMission) state.missionBags = parseInt(savedMission);
     const savedRound = localStorage.getItem('dbt_round');
-    if (savedRound) state.roundLabel = savedRound;
+    if (savedRound && !savedRound.includes('06/09')) {
+      state.roundLabel = savedRound;
+    }
   } catch (e) {}
 }
 
