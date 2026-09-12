@@ -8,6 +8,8 @@ let state = {
   selectedSize: 'small-bag',
   selectedQuantity: 1,
   slipDataUrl: null,
+  slipQrValid: false,
+  slipQrData: null,
   currentOrder: null,
   checkoutItems: [],
   isDirectBuy: false
@@ -664,6 +666,7 @@ function openCheckoutModal(isDirect = false) {
     if (addressInput && !addressInput.value && lastCustomer.address) addressInput.value = lastCustomer.address;
   } catch (e) {}
 
+  removeSlip();
   modal.classList.remove('hidden');
 }
 
@@ -693,8 +696,8 @@ function copyAmount() {
   });
 }
 
-// บีบอัดรูปสลิปก่อนส่งเพื่อความรวดเร็วและไม่เปลืองพื้นที่
-function compressSlipImage(file, maxWidth = 1000, quality = 0.75) {
+// ฟังก์ชันประมวลผลและสแกนตรวจจับ QR Code บนสลิปธนาคาร
+function processAndScanSlip(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -702,21 +705,53 @@ function compressSlipImage(file, maxWidth = 1000, quality = 0.75) {
       img.onload = () => {
         let width = img.width;
         let height = img.height;
+        const maxWidth = 1200;
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
         }
+
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+
+        let qrCode = null;
+        if (typeof jsQR === 'function') {
+          try {
+            // สแกนรอบที่ 1: ภาพปกติ
+            const imgData = ctx.getImageData(0, 0, width, height);
+            qrCode = jsQR(imgData.data, width, height, { inversionAttempts: "dontInvert" });
+
+            // สแกนรอบที่ 2: สลับสี (สำหรับสลิปธีมมืดหรือมีลวดลาย)
+            if (!qrCode) {
+              qrCode = jsQR(imgData.data, width, height, { inversionAttempts: "onlyInvert" });
+            }
+
+            // สแกนรอบที่ 3: โฟกัสเฉพาะครึ่งล่างของสลิป (จุดที่ธนาคารไทยวาง Mini QR เสมอ)
+            if (!qrCode) {
+              const startY = Math.floor(height * 0.35);
+              const subH = height - startY;
+              const subData = ctx.getImageData(0, startY, width, subH);
+              qrCode = jsQR(subData.data, width, subH, { inversionAttempts: "attemptBoth" });
+            }
+          } catch (err) {
+            console.warn('QR scan error:', err);
+          }
+        }
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        resolve({
+          dataUrl: dataUrl,
+          hasQr: !!qrCode,
+          qrData: qrCode ? qrCode.data : null
+        });
       };
-      img.onerror = () => resolve(e.target.result);
+      img.onerror = () => resolve({ dataUrl: null, hasQr: false });
       img.src = e.target.result;
     };
-    reader.onerror = () => resolve(null);
+    reader.onerror = () => resolve({ dataUrl: null, hasQr: false });
     reader.readAsDataURL(file);
   });
 }
@@ -730,30 +765,66 @@ async function handleSlipUpload(event) {
     uploadPrompt.innerHTML = `
       <div class="text-xs font-bold text-amber-700 flex items-center justify-center gap-2 py-3">
         <svg class="animate-spin h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-        <span>กำลังประมวลผลรูปภาพสลิป...</span>
+        <span>กำลังตรวจสอบ QR Code สลิปธนาคาร...</span>
       </div>
     `;
   }
 
-  try {
-    const compressed = await compressSlipImage(file);
-    state.slipDataUrl = compressed || null;
-  } catch (e) {
-    const reader = new FileReader();
-    reader.onload = (ev) => { state.slipDataUrl = ev.target.result; };
-    reader.readAsDataURL(file);
-  }
-
+  const result = await processAndScanSlip(file);
   const previewContainer = document.getElementById('slip-preview-container');
   const previewImg = document.getElementById('slip-preview-img');
 
-  if (previewImg) previewImg.src = state.slipDataUrl;
-  if (previewContainer) previewContainer.classList.remove('hidden');
-  if (uploadPrompt) uploadPrompt.classList.add('hidden');
+  if (result.hasQr && result.dataUrl) {
+    // กรณีผ่าน: ตรวจพบ QR Code ของสลิปธนาคาร
+    state.slipDataUrl = result.dataUrl;
+    state.slipQrValid = true;
+    state.slipQrData = result.qrData;
+
+    if (previewImg) previewImg.src = result.dataUrl;
+    if (previewContainer) {
+      previewContainer.className = "relative rounded-2xl overflow-hidden border-2 border-emerald-400 bg-emerald-50/40 p-2.5 shadow-sm";
+      previewContainer.innerHTML = `
+        <img id="slip-preview-img" src="${result.dataUrl}" alt="สลิปโอนเงิน" class="max-h-52 mx-auto rounded-xl object-contain border border-emerald-200 shadow-sm">
+        <div class="mt-2.5 p-2 bg-emerald-100/70 rounded-xl flex items-center justify-between border border-emerald-300">
+          <div class="flex items-center gap-1.5 text-xs font-extrabold text-emerald-800">
+            <span>✅</span> ตรวจพบสลิปธนาคารเรียบร้อย (มี QR ตรวจสอบ)
+          </div>
+          <button type="button" onclick="removeSlip()" class="text-xs font-bold text-rose-600 hover:text-rose-700 underline cursor-pointer">เปลี่ยนรูป</button>
+        </div>
+      `;
+      previewContainer.classList.remove('hidden');
+    }
+    if (uploadPrompt) uploadPrompt.classList.add('hidden');
+  } else {
+    // กรณีไม่ผ่าน: แนบรูปอื่นที่ไม่ใช่สลิป หรือตรวจไม่พบ QR Code
+    state.slipDataUrl = null;
+    state.slipQrValid = false;
+
+    if (previewContainer) {
+      previewContainer.className = "relative rounded-2xl overflow-hidden border-2 border-rose-400 bg-rose-50/50 p-3 shadow-sm";
+      previewContainer.innerHTML = `
+        <div class="text-center py-2">
+          <div class="text-3xl mb-1">❌</div>
+          <div class="text-xs font-extrabold text-rose-800">รูปภาพนี้ไม่ใช่สลิปโอนเงินธนาคาร</div>
+          <p class="text-[11px] text-rose-600 mt-1 leading-relaxed max-w-xs mx-auto">
+            ระบบตรวจไม่พบ QR Code บนภาพสลิป กรุณาแนบรูปภาพสลิปที่บันทึกจากแอปธนาคารโดยตรงครับ
+          </p>
+          <button type="button" onclick="removeSlip()" class="mt-3 px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow cursor-pointer">
+            แตะเพื่อเลือกรูปสลิปใหม่
+          </button>
+        </div>
+      `;
+      previewContainer.classList.remove('hidden');
+    }
+    if (uploadPrompt) uploadPrompt.classList.add('hidden');
+  }
 }
 
 function removeSlip() {
   state.slipDataUrl = null;
+  state.slipQrValid = false;
+  state.slipQrData = null;
+
   const previewContainer = document.getElementById('slip-preview-container');
   const uploadPrompt = document.getElementById('slip-upload-prompt');
   const fileInput = document.getElementById('slip-file-input');
@@ -788,8 +859,8 @@ function handleOrderSubmit(e) {
   }
 
   // บังคับแนบสลิปการโอนเงิน 100% ป้องกันออเดอร์หลุด/กดเล่น
-  if (!state.slipDataUrl) {
-    alert('⚠️ กรุณาแนบสลิปหลักฐานการโอนเงินก่อนยืนยันคำสั่งซื้อครับ\n(สแกนจ่ายผ่าน QR Code ด้านบน แล้วแตะแนบสลิปด้านล่างได้เลยครับ)');
+  if (!state.slipDataUrl || !state.slipQrValid) {
+    alert('⚠️ กรุณาแนบสลิปหลักฐานการโอนเงินที่ถูกต้องก่อนยืนยันคำสั่งซื้อครับ\n(ระบบต้องสามารถตรวจพบ QR Code บนสลิปธนาคารได้ครับ)');
     const slipSection = document.getElementById('slip-upload-section');
     if (slipSection) slipSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
