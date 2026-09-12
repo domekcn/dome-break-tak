@@ -509,12 +509,25 @@ function openCheckoutModal() {
 
   const orderList = document.getElementById('checkout-items-summary');
   if (orderList) {
-    orderList.innerHTML = state.cart.map(i => `
+    const itemsHtml = state.cart.map(i => `
       <div class="flex justify-between text-xs py-1 border-b border-gray-100">
         <span class="text-gray-700">${i.sizeLabel} (${i.flavorEmoji} ${i.flavorName}) x ${i.quantity}</span>
         <span class="font-bold text-gray-900">฿${i.unitPrice * i.quantity}</span>
       </div>
     `).join('');
+
+    const shippingRowHtml = `
+      <div class="flex justify-between text-xs py-1 text-gray-500 pt-2">
+        <span>รวมค่าสินค้า:</span>
+        <span class="font-semibold text-gray-700">฿${itemsSubtotal}</span>
+      </div>
+      <div class="flex justify-between text-xs py-1 text-gray-500">
+        <span>ค่าจัดส่ง:</span>
+        <span class="font-semibold ${isFreeShipping ? 'text-emerald-600' : 'text-gray-700'}">${isFreeShipping ? 'ส่งฟรี!' : '฿' + shippingFee}</span>
+      </div>
+    `;
+
+    orderList.innerHTML = itemsHtml + shippingRowHtml;
   }
 
   modal.classList.remove('hidden');
