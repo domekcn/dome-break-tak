@@ -1,7 +1,8 @@
 // ระบบการทำงานร้าน โดมเบรคแตก (DOME BREAK TAK)
 let state = {
   cart: [],
-  missionBags: SHOP_CONFIG.initialSimulatedBags,
+  missionBags: SHOP_CONFIG.initialSimulatedBags || 0,
+  roundLabel: 'รอบ 13/09 - 18/09',
   selectedProduct: null,
   selectedFlavorId: 'original',
   selectedSize: 'small-bag',
@@ -20,7 +21,38 @@ document.addEventListener('DOMContentLoaded', () => {
   updateMissionBar();
   updateCartBadge();
   setupEventListeners();
+  fetchLiveMissionData(); // ดึงยอดและชื่อรอบจริงจาก Google Sheet
+  setInterval(() => fetchLiveMissionData(false), 30000); // อัปเดตอัตโนมัติทุก 30 วินาที
 });
+
+// ดึงข้อมูลยอดสะสมและชื่อรอบจาก Google Sheet Web App
+async function fetchLiveMissionData(isManual = false) {
+  if (!SHOP_CONFIG.googleSheetWebAppUrl) return;
+
+  const syncBtn = document.getElementById('sync-mission-btn');
+  if (syncBtn && isManual) {
+    syncBtn.innerHTML = '<span class="animate-spin">🔄</span> กำลังซิงค์...';
+  }
+
+  try {
+    const res = await fetch(SHOP_CONFIG.googleSheetWebAppUrl);
+    const data = await res.json();
+    if (data && data.status === 'success') {
+      if (data.currentBags !== undefined) state.missionBags = Number(data.currentBags);
+      if (data.roundLabel) state.roundLabel = data.roundLabel;
+      saveState();
+      updateMissionBar();
+      if (isManual) showToast(`ซิงค์ข้อมูลสำเร็จ: ${state.roundLabel} (${state.missionBags}/10 ถุง)`);
+    }
+  } catch (err) {
+    console.log('Sync Mission Error:', err);
+    if (isManual) showToast('ไม่สามารถเชื่อมต่อ Google Sheet ได้ในขณะนี้');
+  } finally {
+    if (syncBtn && isManual) {
+      syncBtn.innerHTML = '<span>🔄 ซิงค์ยอด</span>';
+    }
+  }
+}
 
 // ดึงข้อมูลจาก LocalStorage
 function loadSavedState() {
@@ -29,6 +61,8 @@ function loadSavedState() {
     if (savedCart) state.cart = JSON.parse(savedCart);
     const savedMission = localStorage.getItem('dbt_mission');
     if (savedMission) state.missionBags = parseInt(savedMission);
+    const savedRound = localStorage.getItem('dbt_round');
+    if (savedRound) state.roundLabel = savedRound;
   } catch (e) {}
 }
 
@@ -36,6 +70,7 @@ function saveState() {
   try {
     localStorage.setItem('dbt_cart', JSON.stringify(state.cart));
     localStorage.setItem('dbt_mission', state.missionBags.toString());
+    localStorage.setItem('dbt_round', state.roundLabel);
   } catch (e) {}
 }
 
@@ -50,21 +85,25 @@ function updateMissionBar() {
   const countText = document.getElementById('mission-count-text');
   const remainText = document.getElementById('mission-remaining-text');
   const statusBadge = document.getElementById('mission-status-badge');
+  const roundBadge = document.getElementById('mission-round-badge');
 
+  if (roundBadge && state.roundLabel) {
+    roundBadge.textContent = state.roundLabel;
+  }
   if (bar) bar.style.width = `${percent}%`;
   if (countText) countText.textContent = `${current}/${target} ถุง (${percent}%)`;
 
   if (remaining === 0) {
-    if (remainText) remainText.innerHTML = `<span class="text-emerald-300 font-bold">🎉 ครบ 10 ถุงแล้ว! เปิดเตาทอดใหม่รอบนี้ พร้อมส่งทันที</span>`;
+    if (remainText) remainText.innerHTML = `<span class="text-emerald-300 font-bold">🎉 ครบ 10 ถุงแล้ว! เปิดเตาทอดสดใหม่รอบนี้ พร้อมจัดส่งทันที</span>`;
     if (statusBadge) {
       statusBadge.textContent = "🔥 ยอดครบแล้ว! กำลังทอดสด";
-      statusBadge.className = "text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white animate-pulse";
+      statusBadge.className = "text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white animate-pulse whitespace-nowrap";
     }
   } else {
     if (remainText) remainText.innerHTML = `เป้าหมายครบ 10 ถุงเปิดเตาทอดสดใหม่! ขาดอีกเพียง <strong class="text-yellow-300 font-bold text-base">${remaining}</strong> ถุง`;
     if (statusBadge) {
       statusBadge.textContent = "⚡ กำลังสะสมยอด";
-      statusBadge.className = "text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-400 text-amber-950";
+      statusBadge.className = "text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-400 text-amber-950 whitespace-nowrap";
     }
   }
 }
@@ -736,6 +775,74 @@ function handleOrderSubmit(e) {
     grandTotal,
     lineMessage
   };
+
+  // คำนวณสรุปแยกขนาดถุงและรสชาติสำหรับลง Google Sheet
+  const breakdown = {
+    small_original: 0,
+    small_sweet: 0,
+    small_salty: 0,
+    small_paprika: 0,
+    small_total: 0,
+    large_original: 0,
+    large_sweet: 0,
+    large_salty: 0,
+    large_paprika: 0,
+    large_total: 0,
+    grand_total: 0
+  };
+
+  items.forEach(item => {
+    const isSmall = item.productId === 'small-bag';
+    const prefix = isSmall ? 'small_' : 'large_';
+    const key = prefix + item.flavorId;
+    if (breakdown[key] !== undefined) {
+      breakdown[key] += item.quantity;
+    }
+    if (isSmall) {
+      breakdown.small_total += item.quantity;
+    } else {
+      breakdown.large_total += item.quantity;
+    }
+    breakdown.grand_total += item.quantity;
+  });
+
+  // ส่งข้อมูลออเดอร์ลง Google Sheet อัตโนมัติ (เบื้องหลัง)
+  if (SHOP_CONFIG.googleSheetWebAppUrl) {
+    const orderPayload = {
+      orderId: orderId,
+      customerName: nameInput.value.trim(),
+      deliveryMethod: state.deliveryMethod || 'office',
+      phone: (phoneInput && phoneInput.value.trim()) || '-',
+      address: isOffice ? 'จัดส่งที่ออฟฟิศ' : ((addressInput && addressInput.value.trim()) || '-'),
+      itemsSummary: items.map(i => `${i.sizeLabel} (${i.flavorName}) x${i.quantity}`).join(', '),
+      breakdown: breakdown,
+      totalBags: totalBags,
+      grandTotal: grandTotal,
+      note: (noteInput && noteInput.value.trim()) || '-'
+    };
+
+    fetch(SHOP_CONFIG.googleSheetWebAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(orderPayload)
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.status === 'success') {
+        if (data.currentBags !== undefined) {
+          state.missionBags = Number(data.currentBags);
+        }
+        if (data.roundLabel) {
+          state.roundLabel = data.roundLabel;
+        }
+        saveState();
+        updateMissionBar();
+      }
+    })
+    .catch(err => {
+      console.log('Order sync to Google Sheet error:', err);
+    });
+  }
 
   const wasDirectBuy = state.isDirectBuy;
   triggerConfetti();
