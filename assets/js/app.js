@@ -415,6 +415,15 @@ function updateCartBadge() {
       b.classList.remove('animate-bounce-slow');
     }
   });
+
+  const floatingBtn = document.getElementById('floating-cart-btn');
+  if (floatingBtn) {
+    if (totalQty > 0) {
+      floatingBtn.classList.remove('hidden');
+    } else {
+      floatingBtn.classList.add('hidden');
+    }
+  }
 }
 
 function showToast(message) {
@@ -472,6 +481,7 @@ function renderCartDrawer() {
   if (summarySection) summarySection.classList.remove('hidden');
 
   const totalBags = state.cart.reduce((sum, item) => sum + item.quantity, 0);
+  const itemsSubtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
   const isOffice = (state.deliveryMethod || 'office') === 'office';
   const shippingFee = isOffice ? 0 : 50;
   const grandTotal = itemsSubtotal + shippingFee;
