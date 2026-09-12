@@ -619,12 +619,12 @@
         <div class="absolute -left-6 -top-6 w-24 h-24 bg-yellow-300/20 rounded-full blur-lg pointer-events-none"></div>
 
         <div class="relative z-10">
-          <div class="flex items-center justify-between gap-2 mb-2.5">
+          <div class="flex items-center justify-between gap-2 mb-2">
             <div class="flex items-center gap-2">
               <span class="text-2xl animate-bounce-slow">🎫</span>
               <div>
                 <h4 class="font-extrabold text-sm sm:text-base leading-tight text-white">บัตรสะสมแต้ม โดมเบรคแตก</h4>
-                <p class="text-[10px] text-amber-100 font-medium">ซื้อครบ 10 ถุง รับฟรี 1 ถุงทันที! 🎁</p>
+                <p class="text-[10px] text-amber-100 font-medium">ถุงเล็ก = 1 แต้ม • ถุงใหญ่ = 3 แต้ม</p>
               </div>
             </div>
             <span id="stamp-customer-badge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-black/20 backdrop-blur-sm border border-white/20 text-yellow-200 max-w-[120px] truncate">
@@ -632,20 +632,31 @@
             </span>
           </div>
 
-          <!-- ช่องสแตมป์ 10 ช่อง (Grid 5x2) -->
-          <div id="stamp-grid-container" class="grid grid-cols-5 gap-2 my-3">
+          <!-- แถบความคืบหน้ารางวัล 2 ขั้น (10 แต้ม & 30 แต้ม) -->
+          <div class="bg-black/20 backdrop-blur-sm p-2 rounded-2xl border border-white/20 my-2.5 text-xs">
+            <div class="flex justify-between items-center text-[10px] sm:text-[11px] font-bold mb-1">
+              <span class="text-yellow-200 flex items-center gap-1">🎯 10 แต้ม: ฟรีถุงเล็ก</span>
+              <span class="text-amber-200 flex items-center gap-1">👑 30 แต้ม: ฟรีถุงใหญ่</span>
+            </div>
+            <div class="w-full bg-white/20 rounded-full h-2 overflow-hidden shadow-inner">
+              <div id="stamp-progress-bar-fill" class="bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 h-full rounded-full transition-all duration-700" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- ช่องสแตมป์ 30 ช่อง (Grid 10x3) -->
+          <div id="stamp-grid-container" class="grid grid-cols-10 gap-1 my-3">
             <!-- Rendered dynamically by JS with pop animations -->
           </div>
 
-          <!-- แถบสรุปแต้ม -->
-          <div class="flex items-center justify-between text-xs pt-2 border-t border-white/20">
-            <span id="stamp-status-text" class="font-bold text-amber-100">สะสมแล้ว 0/10 ถุง</span>
-            <span id="stamp-reward-badge" class="font-extrabold text-yellow-200">ขาดอีก 10 ถุง แลกฟรี!</span>
-          </div>
-
-          <!-- แบนเนอร์แสดงเมื่อสะสมครบ 10 ถุง -->
-          <div id="stamp-congrats-banner" class="hidden mt-3 p-2.5 bg-emerald-500/95 backdrop-blur-sm rounded-2xl border border-emerald-300 text-center text-xs font-extrabold text-white animate-pulse">
-            🎉 ยินดีด้วย! สะสมครบ 10 ถุงแล้ว แจ้งรับฟรีกล้วยเบรคแตก 1 ถุงในแชท LINE ได้เลยครับ!
+          <!-- แถบสรุปแต้ม & ปุ่มแลกสิทธิ์ -->
+          <div class="pt-2 border-t border-white/20">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span id="stamp-status-text" class="font-bold text-amber-100">สะสมแล้ว 0/30 แต้ม</span>
+              <span id="stamp-reward-badge" class="font-extrabold text-yellow-200">ขาดอีก 10 แต้ม แลกถุงเล็ก!</span>
+            </div>
+            <div id="stamp-actions-container" class="mt-2 space-y-1.5">
+              <!-- Rendered via JS when reaching 10 or 30 points -->
+            </div>
           </div>
         </div>
       </div>
@@ -699,15 +710,17 @@
           <!-- Rendered via JS -->
         </div>
 
-        <!-- กติกาการสะสมแต้ม -->
+        <!-- กติกาการสะสมแต้ม (อัปเดตตามกติกาใหม่ 1pt/3pt และ 10pt/30pt) -->
         <div class="p-3.5 bg-amber-50/80 rounded-2xl border border-amber-200 text-xs text-amber-900 space-y-1.5">
           <div class="font-bold flex items-center gap-1 text-amber-950">
             <span>🍌</span>
-            <span>กติกาการสะสมแต้ม:</span>
+            <span>กติกาการสะสมแต้ม & แลกของรางวัล:</span>
           </div>
-          <p class="text-gray-600">• ซื้อกล้วยเบรคแตกขนาดใดก็ได้ <strong>1 ถุง = รับ 1 แต้ม</strong></p>
-          <p class="text-gray-600">• สะสมครบ <strong>10 แต้ม = รับฟรี 1 ถุงทันที</strong> ในการสั่งซื้อรอบถัดไป</p>
-          <p class="text-gray-600">• แต้มสะสมไม่มีวันหมดอายุ สามารถแจ้งใช้สิทธิ์ในแชท LINE ได้เลยครับ</p>
+          <p class="text-gray-700">• ซื้อ <strong>ถุงเล็ก 1 ถุง = รับ 1 แต้ม</strong></p>
+          <p class="text-gray-700">• ซื้อ <strong>ถุงใหญ่ 1 ถุง = รับ 3 แต้ม</strong></p>
+          <p class="text-emerald-700 font-semibold">• 🎯 สะสมครบ <strong>10 แต้ม</strong> = แลกรับ <strong>ฟรีกล้วยเบรคแตกถุงเล็ก 1 ถุง</strong></p>
+          <p class="text-amber-700 font-semibold">• 👑 สะสมครบ <strong>30 แต้ม</strong> = แลกรับ <strong>ฟรีกล้วยเบรคแตกถุงใหญ่ 1 ถุง</strong></p>
+          <p class="text-rose-600 text-[11px] font-medium">*หมายเหตุ: หากเลือกใช้แต้มแลกรางวัลก่อน ระบบจะเคลียร์แต้มเป็น 0 เพื่อเริ่มสะสมรอบใหม่ทันทีครับ</p>
         </div>
 
         <button type="button" onclick="closeLoyaltyModal()" class="w-full py-2.5 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs transition-colors">

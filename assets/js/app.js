@@ -759,11 +759,34 @@ function handleOrderSubmit(e) {
   if (addressInput && addressInput.value.trim()) customerDetailsText += `ที่อยู่: ${addressInput.value.trim()}\n`;
   if (noteInput && noteInput.value.trim()) customerDetailsText += `หมายเหตุ: ${noteInput.value.trim()}\n`;
 
+  // คำนวณแต้มสะสมสำหรับออเดอร์นี้ (ถุงเล็ก = 1 แต้ม, ถุงใหญ่ = 3 แต้ม)
+  const smallBagPoints = (SHOP_CONFIG.loyaltyConfig && SHOP_CONFIG.loyaltyConfig.smallBagPoints) || 1;
+  const largeBagPoints = (SHOP_CONFIG.loyaltyConfig && SHOP_CONFIG.loyaltyConfig.largeBagPoints) || 3;
+
+  let earnedPoints = 0;
+  items.forEach(item => {
+    if (item.productId === 'small-bag') {
+      earnedPoints += item.quantity * smallBagPoints;
+    } else {
+      earnedPoints += item.quantity * largeBagPoints;
+    }
+  });
+
   const lKey = getLoyaltyKey(nameInput.value.trim(), phoneInput ? phoneInput.value.trim() : '');
   const prevLoyalty = getCustomerLoyalty(lKey);
-  const newStampsCount = prevLoyalty.currentStamps + totalBags;
-  const cardStamps = newStampsCount % 10;
-  const stampsInfoText = `🎫 แต้มสะสม: ${cardStamps}/10 ถุง (สะสมทั้งหมด ${newStampsCount} ถุง)\n`;
+  const prevPoints = prevLoyalty.currentPoints || 0;
+  const newPoints = Math.min(30, prevPoints + earnedPoints);
+
+  let loyaltyNotice = '';
+  if (newPoints >= 30) {
+    loyaltyNotice = ' 👑 สะสมครบ 30 แต้ม แลกรับฟรีถุงใหญ่!';
+  } else if (newPoints >= 10) {
+    loyaltyNotice = ` 🎁 สะสมครบ 10 แต้ม แลกรับฟรีถุงเล็กได้แล้ว (หรือสะสมต่ออีก ${30 - newPoints} แต้มเพื่อแลกถุงใหญ่)`;
+  } else {
+    loyaltyNotice = ` (ขาดอีก ${10 - newPoints} แต้ม แลกฟรีถุงเล็ก)`;
+  }
+
+  const stampsInfoText = `🎫 แต้มสะสม: ${newPoints}/30 แต้ม (+${earnedPoints} แต้มจากออเดอร์นี้)${loyaltyNotice}\n`;
 
   const lineMessage = `🍌 ยืนยันคำสั่งซื้อ กล้วยเบรคแตก [ออเดอร์ #${orderId}] 🍌\n\n` +
     `👤 ข้อมูลผู้สั่งซื้อ:\n${customerDetailsText}` +
@@ -778,9 +801,10 @@ function handleOrderSubmit(e) {
   state.currentOrder = {
     orderId,
     customerName: nameInput.value.trim(),
-    phone: (phoneInput && phoneInput.value.trim()) || 'จัดส่งที่ออฟฟิศ',
-    address: isOffice ? 'จัดส่งที่ออฟฟิศ' : (addressInput && addressInput.value.trim()),
+    phone: (phoneInput && phoneInput.value.trim()) || (isOffice ? 'จัดส่งที่ออฟฟิศ' : '-'),
+    address: isOffice ? 'จัดส่งที่ออฟฟิศ' : ((addressInput && addressInput.value.trim()) || '-'),
     totalBags,
+    earnedPoints,
     grandTotal,
     lineMessage
   };
@@ -881,8 +905,8 @@ function openOrderSuccessModal() {
     document.getElementById('success-phone').textContent = order.phone;
     document.getElementById('success-grand-total').textContent = '฿' + order.grandTotal;
 
-    // อัปเดตและแสดงแอนิเมชันปั๊มตราบัตรสะสมแต้ม E-Stamp
-    updateSuccessStampCard(order, order.totalBags || 1);
+    // อัปเดตและแสดงแอนิเมชันปั๊มตราบัตรสะสมแต้ม E-Stamp (30 แต้ม, ถุงเล็ก=1, ถุงใหญ่=3)
+    updateSuccessStampCard(order, order.earnedPoints || 1);
   }
 
   modal.classList.remove('hidden');
@@ -895,6 +919,10 @@ function closeOrderSuccessModal() {
 
 // ==========================================
 // 🎫 ระบบบัตรสะสมแต้ม E-Stamp (Loyalty Card)
+// กติกา: ถุงเล็ก = 1 แต้ม, ถุงใหญ่ = 3 แต้ม
+// สะสม 10 แต้ม = ฟรีถุงเล็ก 1 ถุง
+// สะสม 30 แต้ม = ฟรีถุงใหญ่ 1 ถุง
+// หากใช้แต้มก่อน แต้มจะเคลียร์เป็น 0 เพื่อเริ่มรอบใหม่
 // ==========================================
 
 function getLoyaltyKey(name, phone) {
@@ -916,12 +944,14 @@ function getAllLoyaltyData() {
 
 function getCustomerLoyalty(key) {
   const all = getAllLoyaltyData();
-  return all[key] || {
-    customerName: '',
-    phone: '',
-    currentStamps: 0,
-    totalBagsLifetime: 0,
-    totalRewardsEarned: 0
+  const rec = all[key] || {};
+  return {
+    customerName: rec.customerName || '',
+    phone: rec.phone || '',
+    currentPoints: rec.currentPoints ?? rec.currentStamps ?? 0,
+    totalPointsLifetime: rec.totalPointsLifetime ?? rec.totalBagsLifetime ?? 0,
+    totalRewardsEarned: rec.totalRewardsEarned || 0,
+    history: rec.history || []
   };
 }
 
@@ -934,53 +964,76 @@ function saveCustomerLoyalty(key, data) {
   } catch (e) {}
 }
 
-// เรนเดอร์ช่องตราสแตมป์ 10 ช่อง พร้อมอนิเมชันปั๊มตรา
-function renderStampGrid(containerEl, currentStamps, newlyAdded = 0) {
+// เรนเดอร์ช่องตราสแตมป์ 30 ช่อง (Grid 10x3) พร้อมอนิเมชันปั๊มตราทีละดวง
+function renderStampGrid(containerEl, currentPoints, newlyAdded = 0) {
   if (!containerEl) return;
   containerEl.innerHTML = '';
 
-  const stampsBefore = Math.max(0, currentStamps - newlyAdded);
+  const stampsBefore = Math.max(0, currentPoints - newlyAdded);
 
-  for (let i = 1; i <= 10; i++) {
-    const isStamped = i <= currentStamps;
+  for (let i = 1; i <= 30; i++) {
+    const isStamped = i <= currentPoints;
     const isNewlyStamped = isStamped && i > stampsBefore;
     const isSlot10 = (i === 10);
+    const isSlot30 = (i === 30);
 
     const slot = document.createElement('div');
-    slot.className = `relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all duration-300 ${
+    slot.className = `relative aspect-square rounded-lg sm:rounded-xl flex flex-col items-center justify-center transition-all duration-300 ${
       isStamped
-        ? 'bg-gradient-to-br from-yellow-300 via-amber-400 to-amber-500 text-amber-950 shadow-md shadow-amber-900/20 ring-2 ring-yellow-200 font-extrabold'
-        : 'border-2 border-dashed border-white/40 bg-white/10 text-white/60'
+        ? (isSlot30
+            ? 'bg-gradient-to-br from-amber-300 via-orange-400 to-amber-600 text-amber-950 shadow-md ring-2 ring-yellow-100 font-extrabold animate-pulse-glow'
+            : (isSlot10
+                ? 'bg-gradient-to-br from-yellow-200 via-yellow-400 to-amber-500 text-amber-950 shadow-md ring-2 ring-yellow-200 font-extrabold animate-pulse-glow'
+                : 'bg-gradient-to-br from-yellow-300 via-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-yellow-200 font-black'
+              )
+          )
+        : (isSlot30
+            ? 'border-2 border-dashed border-amber-300 bg-amber-400/25 text-amber-100 ring-1 ring-amber-300/40'
+            : (isSlot10
+                ? 'border-2 border-dashed border-yellow-300/80 bg-yellow-400/20 text-yellow-100 ring-1 ring-yellow-300/30'
+                : 'border border-dashed border-white/40 bg-white/10 text-white/60'
+              )
+          )
     }`;
 
-    // แต้มใหม่ที่เพิ่งได้ ให้เล่นแอนิเมชันปั๊มตรา
+    // แต้มใหม่ที่เพิ่งได้ ให้เล่นแอนิเมชันปั๊มตราตามลำดับ
     if (isNewlyStamped) {
-      const delayMs = (i - stampsBefore - 1) * 220;
+      const delayMs = (i - stampsBefore - 1) * 120;
       slot.style.animationDelay = `${delayMs}ms`;
       slot.classList.add('animate-stamp-in');
     }
 
     if (isStamped) {
-      if (isSlot10) {
+      if (isSlot30) {
         slot.innerHTML = `
-          <span class="text-xl sm:text-2xl animate-bounce-slow">🎁</span>
-          <span class="text-[9px] font-black uppercase leading-none mt-0.5 text-amber-950">ฟรี 1 ถุง</span>
+          <span class="text-xs sm:text-sm leading-none animate-bounce-slow">👑</span>
+          <span class="text-[7px] font-black uppercase leading-none mt-0.5 text-amber-950">30🎁</span>
+        `;
+      } else if (isSlot10) {
+        slot.innerHTML = `
+          <span class="text-xs sm:text-sm leading-none animate-bounce-slow">🎁</span>
+          <span class="text-[7px] font-black uppercase leading-none mt-0.5 text-amber-950">10⭐</span>
         `;
       } else {
         slot.innerHTML = `
-          <span class="text-xl sm:text-2xl">🍌</span>
-          <span class="text-[9px] font-black leading-none mt-0.5">${i}</span>
+          <span class="text-xs sm:text-sm leading-none">🍌</span>
+          <span class="text-[7px] sm:text-[8px] font-black leading-none mt-0.5">${i}</span>
         `;
       }
     } else {
-      if (isSlot10) {
+      if (isSlot30) {
         slot.innerHTML = `
-          <span class="text-base sm:text-lg opacity-40">🎁</span>
-          <span class="text-[8px] font-bold text-white/70">ฟรี 1 ถุง</span>
+          <span class="text-[11px] opacity-80 leading-none">👑</span>
+          <span class="text-[7px] font-bold text-amber-100 leading-none mt-0.5">30</span>
+        `;
+      } else if (isSlot10) {
+        slot.innerHTML = `
+          <span class="text-[11px] opacity-70 leading-none">🎁</span>
+          <span class="text-[7px] font-bold text-yellow-200 leading-none mt-0.5">10</span>
         `;
       } else {
         slot.innerHTML = `
-          <span class="text-xs sm:text-sm font-bold opacity-70">${i}</span>
+          <span class="text-[8px] sm:text-[9px] font-bold opacity-70 leading-none">${i}</span>
         `;
       }
     }
@@ -990,55 +1043,162 @@ function renderStampGrid(containerEl, currentStamps, newlyAdded = 0) {
 }
 
 // อัปเดตบัตรสะสมแต้มในหน้า Order Success
-function updateSuccessStampCard(order, addedBags) {
+function updateSuccessStampCard(order, addedPoints = 0) {
   const key = getLoyaltyKey(order.customerName, order.phone);
   const prevRecord = getCustomerLoyalty(key);
 
-  const prevStamps = prevRecord.currentStamps;
-  const newStampsTotal = prevStamps + addedBags;
-  const currentCardStamps = newStampsTotal % 10;
-  const rewardsEarned = Math.floor(newStampsTotal / 10);
-
-  const updatedRecord = {
-    customerName: order.customerName,
-    phone: order.phone,
-    currentStamps: newStampsTotal,
-    totalBagsLifetime: (prevRecord.totalBagsLifetime || 0) + addedBags,
-    totalRewardsEarned: rewardsEarned
-  };
-  saveCustomerLoyalty(key, updatedRecord);
+  const prevPoints = prevRecord.currentPoints || 0;
+  let newPoints = prevPoints;
+  if (addedPoints > 0) {
+    newPoints = Math.min(30, prevPoints + addedPoints);
+    const updatedRecord = {
+      ...prevRecord,
+      customerName: order.customerName,
+      phone: order.phone,
+      currentPoints: newPoints,
+      totalPointsLifetime: (prevRecord.totalPointsLifetime || 0) + addedPoints
+    };
+    saveCustomerLoyalty(key, updatedRecord);
+  }
 
   // อัปเดต UI บนการ์ด
   const customerBadge = document.getElementById('stamp-customer-badge');
+  const progressBar = document.getElementById('stamp-progress-bar-fill');
   const statusText = document.getElementById('stamp-status-text');
   const rewardBadge = document.getElementById('stamp-reward-badge');
-  const congratsBanner = document.getElementById('stamp-congrats-banner');
+  const actionsContainer = document.getElementById('stamp-actions-container');
   const gridContainer = document.getElementById('stamp-grid-container');
 
   if (customerBadge) customerBadge.textContent = order.customerName || 'ลูกค้า';
 
-  const displayCount = (newStampsTotal >= 10 && currentCardStamps === 0) ? 10 : currentCardStamps;
-  const remaining = 10 - displayCount;
+  // แถบความคืบหน้า (0-100%)
+  const percent = Math.min(100, Math.round((newPoints / 30) * 100));
+  if (progressBar) progressBar.style.width = `${percent}%`;
 
-  if (statusText) statusText.textContent = `สะสมแล้ว ${displayCount}/10 ถุง (+${addedBags} ถุงรอบนี้)`;
+  if (statusText) {
+    statusText.textContent = `สะสมแล้ว ${newPoints}/30 แต้ม` + (addedPoints > 0 ? ` (+${addedPoints} แต้มรอบนี้)` : '');
+  }
+
   if (rewardBadge) {
-    if (remaining === 0 || newStampsTotal >= 10) {
-      rewardBadge.textContent = '🎉 แลกฟรี 1 ถุงได้เลย!';
+    if (newPoints >= 30) {
+      rewardBadge.innerHTML = '👑 <span class="underline">ครบ 30 แต้ม แลกถุงใหญ่ได้เลย!</span>';
+    } else if (newPoints >= 10) {
+      rewardBadge.innerHTML = '🎁 <span class="underline">ครบ 10 แต้ม แลกถุงเล็กได้แล้ว!</span>';
     } else {
-      rewardBadge.textContent = `ขาดอีก ${remaining} ถุง แลกฟรี!`;
+      rewardBadge.textContent = `ขาดอีก ${10 - newPoints} แต้ม แลกฟรีถุงเล็ก`;
     }
   }
 
-  if (congratsBanner) {
-    if (newStampsTotal >= 10) {
-      congratsBanner.classList.remove('hidden');
-      setTimeout(() => triggerConfetti(), 600);
+  // เรนเดอร์ปุ่มแลกรางวัลตามเงื่อนไข
+  if (actionsContainer) {
+    if (newPoints >= 30) {
+      actionsContainer.innerHTML = `
+        <div class="space-y-1.5">
+          <button type="button" onclick="redeemLoyaltyReward('${key}', 2)" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 text-amber-950 font-extrabold text-xs shadow-lg hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-yellow-200 animate-pulse-glow cursor-pointer">
+            <span>👑 แลกรับฟรี "ถุงใหญ่ 1 ถุง" (แต้มจะเคลียร์เป็น 0)</span>
+          </button>
+          <button type="button" onclick="redeemLoyaltyReward('${key}', 1)" class="w-full py-1.5 px-3 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-[10px] transition-all text-center cursor-pointer">
+            หรือเลือกแลก "ถุงเล็ก 1 ถุง" (แต้มจะเคลียร์เป็น 0)
+          </button>
+        </div>
+      `;
+    } else if (newPoints >= 10) {
+      actionsContainer.innerHTML = `
+        <div class="space-y-1.5">
+          <button type="button" onclick="redeemLoyaltyReward('${key}', 1)" class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-yellow-300 to-amber-400 text-amber-950 font-extrabold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-yellow-200 cursor-pointer">
+            <span>🎁 ใช้ 10 แต้ม แลกฟรี "ถุงเล็ก 1 ถุง" (แต้มจะเคลียร์เป็น 0)</span>
+          </button>
+          <div class="text-[10px] text-amber-100 text-center font-medium bg-black/20 py-1 px-2 rounded-lg">
+            ✨ หรือสะสมต่ออีก <strong class="text-yellow-200">${30 - newPoints} แต้ม</strong> เพื่อแลก <strong class="text-yellow-200">ฟรีถุงใหญ่</strong>!
+          </div>
+        </div>
+      `;
     } else {
-      congratsBanner.classList.add('hidden');
+      actionsContainer.innerHTML = `
+        <div class="text-[10px] sm:text-[11px] text-amber-100 bg-black/15 py-1.5 px-2.5 rounded-xl text-center">
+          🍌 สั่งถุงเล็ก = 1 แต้ม • ถุงใหญ่ = 3 แต้ม (ครบ 10 แต้มแลกถุงเล็ก / ครบ 30 แต้มแลกถุงใหญ่)
+        </div>
+      `;
     }
   }
 
-  renderStampGrid(gridContainer, displayCount, addedBags);
+  // เรนเดอร์ 30 ช่องพร้อมแอนิเมชันปั๊มตรา
+  renderStampGrid(gridContainer, newPoints, addedPoints);
+
+  if ((newPoints >= 10 || newPoints >= 30) && addedPoints > 0) {
+    setTimeout(() => triggerConfetti(), 800);
+  }
+}
+
+// ใช้แต้มแลกของรางวัล (เงื่อนไข: เมื่อใช้สิทธิ์แล้ว แต้มจะถูกเคลียร์เป็น 0 ทันทีเพื่อเริ่มรอบใหม่)
+function redeemLoyaltyReward(key, tier) {
+  const record = getCustomerLoyalty(key);
+  const currentPoints = record.currentPoints || 0;
+
+  if (tier === 1 && currentPoints < 10) {
+    showToast('แต้มสะสมยังไม่ถึง 10 แต้มครับ');
+    return;
+  }
+  if (tier === 2 && currentPoints < 30) {
+    showToast('แต้มสะสมยังไม่ถึง 30 แต้มครับ');
+    return;
+  }
+
+  const rewardTitle = (tier === 2) 
+    ? (SHOP_CONFIG.loyaltyConfig?.tier2Reward || 'ฟรีกล้วยเบรคแตกถุงใหญ่ 1 ถุง') 
+    : (SHOP_CONFIG.loyaltyConfig?.tier1Reward || 'ฟรีกล้วยเบรคแตกถุงเล็ก 1 ถุง');
+
+  const confirmMsg = `🎁 ยืนยันการใช้สิทธิ์แลก "${rewardTitle}" ใช่หรือไม่?\n\n` +
+    `⚠️ สำคัญ: เมื่อกดยืนยันแล้ว แต้มสะสมทั้งหมด (${currentPoints} แต้ม) จะถูกเคลียร์เป็น 0 ทันที เพื่อเริ่มสะสมรอบใหม่`;
+
+  if (!confirm(confirmMsg)) return;
+
+  const pointsSpent = currentPoints;
+  record.currentPoints = 0; // เคลียร์เป็น 0 ทันทีตามเงื่อนไขที่ผู้ใช้สั่ง!
+  record.totalRewardsEarned = (record.totalRewardsEarned || 0) + 1;
+  record.lastRedeemed = {
+    date: new Date().toLocaleString('th-TH'),
+    tier,
+    rewardTitle,
+    pointsSpent
+  };
+  saveCustomerLoyalty(key, record);
+
+  triggerConfetti();
+  showToast(`🎉 แลกรับ ${rewardTitle} สำเร็จ! แต้มถูกเคลียร์เป็น 0 เพื่อเริ่มสะสมรอบใหม่`);
+
+  // อัปเดต UI หน้าที่เปิดอยู่
+  const successModal = document.getElementById('order-success-modal');
+  if (successModal && !successModal.classList.contains('hidden')) {
+    updateSuccessStampCard({ customerName: record.customerName, phone: record.phone }, 0);
+  }
+
+  const loyaltyModal = document.getElementById('loyalty-modal');
+  if (loyaltyModal && !loyaltyModal.classList.contains('hidden')) {
+    renderStandaloneCard(record, key);
+  }
+
+  // สร้างข้อความแจ้งใช้สิทธิ์ส่งเข้า LINE Official @448gijej
+  const claimLineMessage = `🎉 ขอใช้สิทธิ์แลกของรางวัลบัตรสะสมแต้ม โดมเบรคแตก 🎉\n\n` +
+    `👤 ลูกค้า: ${record.customerName || 'ลูกค้า'}\n` +
+    `📞 เบอร์โทร: ${record.phone || '-'}\n` +
+    `🎁 รางวัลที่แลก: ${rewardTitle}\n` +
+    `🎫 แต้มที่ใช้: ${pointsSpent} แต้ม\n` +
+    `🔄 สถานะแต้มปัจจุบัน: เคลียร์เป็น 0 แต้ม (เริ่มสะสมรอบใหม่)\n\n` +
+    `ขอรับสิทธิ์พร้อมคำสั่งซื้อ/รับหน้าร้านนะครับ/ค่ะ ขอบคุณครับ!`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(claimLineMessage).catch(() => {});
+  }
+
+  setTimeout(() => {
+    const askOpenLine = confirm(
+      `🎉 แลกสิทธิ์สำเร็จเรียบร้อยครับ!\n\nระบบได้คัดลอกข้อความแจ้งสิทธิ์ให้แล้ว คุณต้องการเปิด LINE Official (@448gijej) เพื่อส่งแจ้งให้ทางร้านทราบทันทีหรือไม่?`
+    );
+    if (askOpenLine) {
+      window.open(SHOP_CONFIG.lineUrl, '_blank');
+    }
+  }, 400);
 }
 
 // เปิดโมดอลตรวจสอบบัตรสะสมแต้ม (เปิดดูได้ตลอดเวลา)
@@ -1056,9 +1216,9 @@ function openLoyaltyModal() {
         ? record.phone 
         : (record.customerName || '');
     }
-    renderStandaloneCard(record);
+    renderStandaloneCard(record, activeKey);
   } else {
-    renderStandaloneCard(null);
+    renderStandaloneCard(null, '');
   }
 
   modal.classList.remove('hidden');
@@ -1080,109 +1240,137 @@ function handleLoyaltySearch() {
 
   const all = getAllLoyaltyData();
   let matchedRecord = null;
+  let matchedKey = '';
   const cleanQ = query.toLowerCase().replace(/\D/g, '');
 
   for (const [k, v] of Object.entries(all)) {
     const cleanPhone = (v.phone || '').replace(/\D/g, '');
     const cleanName = (v.customerName || '').trim().toLowerCase();
 
-    if ((cleanPhone && cleanPhone.includes(cleanQ)) || (cleanName && cleanName.includes(query.toLowerCase()))) {
+    if ((cleanQ && cleanPhone && cleanPhone.includes(cleanQ)) || (cleanName && cleanName.includes(query.toLowerCase()))) {
       matchedRecord = v;
+      matchedKey = k;
       localStorage.setItem('dbt_active_loyalty_key', k);
       break;
     }
   }
 
   if (matchedRecord) {
-    renderStandaloneCard(matchedRecord);
+    renderStandaloneCard(matchedRecord, matchedKey);
     showToast(`พบข้อมูลบัตรสะสมแต้มของคุณ "${matchedRecord.customerName}"`);
   } else {
+    const newKey = getLoyaltyKey(query, query);
     const newRecord = {
       customerName: query,
       phone: query,
-      currentStamps: 0,
-      totalBagsLifetime: 0,
+      currentPoints: 0,
+      totalPointsLifetime: 0,
       totalRewardsEarned: 0
     };
-    renderStandaloneCard(newRecord);
-    showToast(`ยังไม่พบประวัติสะสมแต้ม เริ่มสะสมได้ในออเดอร์แรกทันทีครับ!`);
+    renderStandaloneCard(newRecord, newKey);
+    showToast(`ยังไม่พบประวัติสะสมแต้ม สั่งซื้อเพื่อเริ่มสะสมแต้มได้เลยครับ!`);
   }
 }
 
-function renderStandaloneCard(record) {
+function renderStandaloneCard(record, key) {
   const container = document.getElementById('standalone-stamp-card-container');
   if (!container) return;
 
-  if (!record || record.currentStamps === 0) {
-    container.innerHTML = `
-      <div class="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-xl text-left relative overflow-hidden">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
-            <span class="text-2xl">🍌</span>
-            <div>
-              <h4 class="font-extrabold text-sm text-white">บัตรสะสมแต้ม โดมเบรคแตก</h4>
-              <p class="text-[10px] text-amber-100 font-medium">ซื้อครบ 10 ถุง รับฟรีกล้วยเบรคแตก 1 ถุง! 🎁</p>
-            </div>
-          </div>
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/20 text-yellow-200">
-            ${(record && record.customerName) ? record.customerName : 'ยังไม่มีแต้ม'}
-          </span>
-        </div>
-        <div class="grid grid-cols-5 gap-2 my-3" id="standalone-stamp-grid"></div>
-        <div class="flex items-center justify-between text-xs pt-2 border-t border-white/20">
-          <span class="font-semibold text-amber-100">สะสมแล้ว 0/10 ถุง</span>
-          <span class="font-extrabold text-yellow-200">สั่งซื้อเพื่อเริ่มสะสมแต้ม!</span>
+  const currentPoints = record ? (record.currentPoints || 0) : 0;
+  const customerName = record ? (record.customerName || record.phone || 'สมาชิก') : 'ยังไม่มีแต้ม';
+  const effectiveKey = key || (record ? getLoyaltyKey(record.customerName, record.phone) : '');
+  const percent = Math.min(100, Math.round((currentPoints / 30) * 100));
+
+  let rewardStatusHtml = '';
+  if (currentPoints >= 30) {
+    rewardStatusHtml = `
+      <div class="space-y-1.5 mt-2">
+        <button type="button" onclick="redeemLoyaltyReward('${effectiveKey}', 2)" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 text-amber-950 font-extrabold text-xs shadow-lg hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-yellow-200 animate-pulse-glow cursor-pointer">
+          <span>👑 แลกรับฟรีกล้วยเบรคแตก "ถุงใหญ่ 1 ถุง" (แต้มจะเคลียร์เป็น 0)</span>
+        </button>
+        <button type="button" onclick="redeemLoyaltyReward('${effectiveKey}', 1)" class="w-full py-1.5 px-3 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-[10px] transition-all text-center cursor-pointer">
+          หรือเลือกแลก "ถุงเล็ก 1 ถุง" (แต้มจะเคลียร์เป็น 0)
+        </button>
+      </div>
+    `;
+  } else if (currentPoints >= 10) {
+    rewardStatusHtml = `
+      <div class="space-y-1.5 mt-2">
+        <button type="button" onclick="redeemLoyaltyReward('${effectiveKey}', 1)" class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-yellow-300 to-amber-400 text-amber-950 font-extrabold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-yellow-200 cursor-pointer">
+          <span>🎁 ใช้ 10 แต้ม แลกฟรี "ถุงเล็ก 1 ถุง" (แต้มจะเคลียร์เป็น 0)</span>
+        </button>
+        <div class="text-[10px] text-amber-100 text-center font-medium bg-black/20 py-1 px-2 rounded-lg">
+          ✨ หรือสะสมต่ออีก <strong class="text-yellow-200">${30 - currentPoints} แต้ม</strong> เพื่อแลก <strong class="text-yellow-200">ฟรีถุงใหญ่</strong>!
         </div>
       </div>
     `;
-    renderStampGrid(document.getElementById('standalone-stamp-grid'), 0, 0);
-    return;
+  } else {
+    rewardStatusHtml = `
+      <div class="text-[10px] sm:text-[11px] text-amber-100 bg-black/15 py-1.5 px-2.5 rounded-xl text-center mt-2">
+        🍌 สั่งถุงเล็ก = 1 แต้ม • ถุงใหญ่ = 3 แต้ม (ขาดอีก ${10 - currentPoints} แต้ม แลกฟรีถุงเล็ก)
+      </div>
+    `;
   }
 
-  const stamps = record.currentStamps;
-  const currentCardStamps = (stamps >= 10 && (stamps % 10 === 0)) ? 10 : (stamps % 10);
-  const remaining = 10 - currentCardStamps;
-
   container.innerHTML = `
-    <div class="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-xl text-left relative overflow-hidden">
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
-          <span class="text-2xl">🍌</span>
-          <div>
-            <h4 class="font-extrabold text-sm text-white">บัตรสะสมแต้ม โดมเบรคแตก</h4>
-            <p class="text-[10px] text-amber-100 font-medium">ซื้อครบ 10 ถุง รับฟรีกล้วยเบรคแตก 1 ถุง! 🎁</p>
+    <div class="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-xl text-left relative overflow-hidden border border-amber-300">
+      <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+      <div class="absolute -left-6 -top-6 w-24 h-24 bg-yellow-300/20 rounded-full blur-lg pointer-events-none"></div>
+
+      <div class="relative z-10">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl animate-bounce-slow">🎫</span>
+            <div>
+              <h4 class="font-extrabold text-sm sm:text-base leading-tight text-white">บัตรสะสมแต้ม โดมเบรคแตก</h4>
+              <p class="text-[10px] text-amber-100 font-medium">ถุงเล็ก = 1 แต้ม • ถุงใหญ่ = 3 แต้ม</p>
+            </div>
+          </div>
+          <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-black/20 backdrop-blur-sm border border-white/20 text-yellow-200 max-w-[120px] truncate">
+            ${customerName}
+          </span>
+        </div>
+
+        <!-- แถบความคืบหน้ารางวัล 2 ขั้น (10 แต้ม & 30 แต้ม) -->
+        <div class="bg-black/20 backdrop-blur-sm p-2 rounded-2xl border border-white/20 my-2.5 text-xs">
+          <div class="flex justify-between items-center text-[10px] sm:text-[11px] font-bold mb-1">
+            <span class="text-yellow-200 flex items-center gap-1">🎯 10 แต้ม: ฟรีถุงเล็ก</span>
+            <span class="text-amber-200 flex items-center gap-1">👑 30 แต้ม: ฟรีถุงใหญ่</span>
+          </div>
+          <div class="w-full bg-white/20 rounded-full h-2 overflow-hidden shadow-inner">
+            <div class="bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-400 h-full rounded-full transition-all duration-700" style="width: ${percent}%;"></div>
           </div>
         </div>
-        <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-black/20 text-yellow-200 max-w-[130px] truncate">
-          ${record.customerName || record.phone || 'สมาชิก'}
-        </span>
-      </div>
 
-      <div class="grid grid-cols-5 gap-2 my-3" id="standalone-stamp-grid"></div>
-
-      <div class="flex items-center justify-between text-xs pt-2 border-t border-white/20">
-        <span class="font-bold text-amber-100">สะสมแล้ว ${currentCardStamps}/10 ถุง (รวมสะสม ${stamps} ถุง)</span>
-        <span class="font-extrabold text-yellow-200">
-          ${remaining === 0 ? '🎉 แลกฟรี 1 ถุงได้เลย!' : `ขาดอีก ${remaining} ถุง`}
-        </span>
-      </div>
-
-      ${currentCardStamps === 10 || stamps >= 10 ? `
-        <div class="mt-3 p-2 bg-emerald-500/90 rounded-xl text-center text-xs font-extrabold text-white">
-          🎉 ได้รับสิทธิ์แลกฟรี 1 ถุง! แจ้งทางร้านใน LINE ได้เลยครับ
+        <!-- ช่องสแตมป์ 30 ช่อง (Grid 10x3) -->
+        <div id="standalone-stamp-grid" class="grid grid-cols-10 gap-1 my-3">
+          <!-- Rendered by JS -->
         </div>
-      ` : ''}
+
+        <!-- แถบสรุปแต้ม & ปุ่มแลกสิทธิ์ -->
+        <div class="pt-2 border-t border-white/20">
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="font-bold text-amber-100">สะสมแล้ว ${currentPoints}/30 แต้ม</span>
+            <span class="font-extrabold text-yellow-200">
+              ${currentPoints >= 30 ? '👑 ครบ 30 แต้มแล้ว!' : (currentPoints >= 10 ? '🎉 ครบ 10 แต้มแล้ว!' : `ขาดอีก ${10 - currentPoints} แต้ม`)}
+            </span>
+          </div>
+          ${rewardStatusHtml}
+        </div>
+      </div>
     </div>
   `;
 
-  renderStampGrid(document.getElementById('standalone-stamp-grid'), currentCardStamps, 0);
+  renderStampGrid(document.getElementById('standalone-stamp-grid'), currentPoints, 0);
 }
 
 function sendOrderToLine() {
   const order = state.currentOrder;
   if (!order) return;
 
-  navigator.clipboard.writeText(order.lineMessage).catch(() => {});
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(order.lineMessage).catch(() => {});
+  }
   const lineUrl = `https://line.me/R/ti/p/@448gijej`;
   window.open(lineUrl, '_blank');
 }

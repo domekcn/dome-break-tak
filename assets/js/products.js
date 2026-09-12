@@ -14,6 +14,14 @@ const SHOP_CONFIG = {
   missionTargetBags: 10,
   initialSimulatedBags: 0, // ค่าเริ่มต้น หากยังโหลดจาก Sheet ไม่สำเร็จ
   googleSheetWebAppUrl: "https://script.google.com/macros/s/AKfycbyLr1JcYOUEvbvE-LHrSD03Ui2cjKVNPUoPd7FG4N0ZnMGemoikcgR7yI8FUIsa6T_r/exec",
+  loyaltyConfig: {
+    smallBagPoints: 1,
+    largeBagPoints: 3,
+    tier1Points: 10,
+    tier1Reward: "ฟรีกล้วยเบรคแตกถุงเล็ก 1 ถุง",
+    tier2Points: 30,
+    tier2Reward: "ฟรีกล้วยเบรคแตกถุงใหญ่ 1 ถุง"
+  },
   deliveryOptions: {
     office: { id: "office", name: "จัดส่งที่ออฟฟิศ", fee: 0, label: "ส่งฟรี!" },
     other: { id: "other", name: "จัดส่งทางอื่น ๆ", fee: 50, label: "เหมาจ่าย 50 บาท" }
