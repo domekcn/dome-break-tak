@@ -1302,10 +1302,68 @@ function handleLoyaltySearch() {
     }
   }
 
+  // หากพบในเครื่อง ให้แสดงผลทันทีก่อน
   if (matchedRecord) {
     renderStandaloneCard(matchedRecord, matchedKey);
     showToast(`พบข้อมูลบัตรสะสมแต้มของคุณ "${matchedRecord.customerName}"`);
   } else {
+    // แสดง loading ขณะกำลังค้นหาจาก Google Sheet
+    const container = document.getElementById('standalone-stamp-card-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="p-6 bg-amber-50 rounded-3xl border border-amber-200 text-center text-amber-900 text-xs animate-pulse">
+          🔍 กำลังค้นหาข้อมูลแต้มสะสมจากฐานข้อมูล Google Sheet...
+        </div>
+      `;
+    }
+  }
+
+  // ดึงข้อมูลอัปเดตล่าสุดจาก Google Sheet แบบ Real-time (ช่วยให้เห็นแต้มที่เจ้าของร้านเพิ่มในชีทได้ทันที)
+  if (SHOP_CONFIG.googleSheetWebAppUrl) {
+    fetch(`${SHOP_CONFIG.googleSheetWebAppUrl}?action=get_loyalty&query=${encodeURIComponent(query)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.status === 'success' && data.found) {
+          const key = data.customerKey || getLoyaltyKey(data.customerName, data.phone);
+          const sheetRecord = {
+            customerName: data.customerName,
+            phone: data.phone || data.customerKey,
+            currentPoints: Number(data.currentPoints) || 0,
+            totalPointsLifetime: Number(data.lifetimePoints) || Number(data.currentPoints) || 0,
+            totalRewardsEarned: Number(data.totalRewardsEarned) || 0,
+            history: []
+          };
+          saveCustomerLoyalty(key, sheetRecord);
+          renderStandaloneCard(sheetRecord, key);
+          showToast(`ซิงค์แต้มของคุณ "${data.customerName}" สำเร็จ (${sheetRecord.currentPoints} แต้ม)`);
+        } else if (!matchedRecord) {
+          const newKey = getLoyaltyKey(query, query);
+          const newRecord = {
+            customerName: query,
+            phone: query,
+            currentPoints: 0,
+            totalPointsLifetime: 0,
+            totalRewardsEarned: 0
+          };
+          renderStandaloneCard(newRecord, newKey);
+          showToast(`ยังไม่พบประวัติสะสมแต้ม สั่งซื้อเพื่อเริ่มสะสมแต้มได้เลยครับ!`);
+        }
+      })
+      .catch(err => {
+        console.log('Loyalty fetch error:', err);
+        if (!matchedRecord) {
+          const newKey = getLoyaltyKey(query, query);
+          const newRecord = {
+            customerName: query,
+            phone: query,
+            currentPoints: 0,
+            totalPointsLifetime: 0,
+            totalRewardsEarned: 0
+          };
+          renderStandaloneCard(newRecord, newKey);
+        }
+      });
+  } else if (!matchedRecord) {
     const newKey = getLoyaltyKey(query, query);
     const newRecord = {
       customerName: query,
