@@ -847,6 +847,9 @@ function handleOrderSubmit(e) {
       itemsSummary: items.map(i => `${i.sizeLabel} (${i.flavorName}) x${i.quantity}`).join(', '),
       breakdown: breakdown,
       totalBags: totalBags,
+      earnedPoints: earnedPoints,
+      customerLoyaltyKey: lKey,
+      currentPoints: newPoints,
       grandTotal: grandTotal,
       note: (noteInput && noteInput.value.trim()) || '-'
     };
@@ -1160,6 +1163,23 @@ function redeemLoyaltyReward(key, tier) {
     pointsSpent
   };
   saveCustomerLoyalty(key, record);
+
+  // ส่งบันทึกการใช้สิทธิ์แลกของรางวัลลง Google Sheet
+  if (SHOP_CONFIG.googleSheetWebAppUrl) {
+    fetch(SHOP_CONFIG.googleSheetWebAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'redeem_loyalty',
+        customerKey: key,
+        customerName: record.customerName || 'ลูกค้า',
+        phone: record.phone || '-',
+        tier: tier,
+        rewardTitle: rewardTitle,
+        pointsSpent: pointsSpent
+      })
+    }).catch(err => console.log('Loyalty redemption sync error:', err));
+  }
 
   triggerConfetti();
   showToast(`🎉 แลกรับ ${rewardTitle} สำเร็จ! แต้มถูกเคลียร์เป็น 0 เพื่อเริ่มสะสมรอบใหม่`);
