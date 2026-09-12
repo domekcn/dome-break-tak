@@ -693,22 +693,63 @@ function copyAmount() {
   });
 }
 
-function handleSlipUpload(event) {
+// บีบอัดรูปสลิปก่อนส่งเพื่อความรวดเร็วและไม่เปลืองพื้นที่
+function compressSlipImage(file, maxWidth = 1000, quality = 0.75) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleSlipUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    state.slipDataUrl = e.target.result;
-    const previewContainer = document.getElementById('slip-preview-container');
-    const previewImg = document.getElementById('slip-preview-img');
-    const uploadPrompt = document.getElementById('slip-upload-prompt');
+  const uploadPrompt = document.getElementById('slip-upload-prompt');
+  if (uploadPrompt) {
+    uploadPrompt.innerHTML = `
+      <div class="text-xs font-bold text-amber-700 flex items-center justify-center gap-2 py-3">
+        <svg class="animate-spin h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        <span>กำลังประมวลผลรูปภาพสลิป...</span>
+      </div>
+    `;
+  }
 
-    if (previewImg) previewImg.src = state.slipDataUrl;
-    if (previewContainer) previewContainer.classList.remove('hidden');
-    if (uploadPrompt) uploadPrompt.classList.add('hidden');
-  };
-  reader.readAsDataURL(file);
+  try {
+    const compressed = await compressSlipImage(file);
+    state.slipDataUrl = compressed || null;
+  } catch (e) {
+    const reader = new FileReader();
+    reader.onload = (ev) => { state.slipDataUrl = ev.target.result; };
+    reader.readAsDataURL(file);
+  }
+
+  const previewContainer = document.getElementById('slip-preview-container');
+  const previewImg = document.getElementById('slip-preview-img');
+
+  if (previewImg) previewImg.src = state.slipDataUrl;
+  if (previewContainer) previewContainer.classList.remove('hidden');
+  if (uploadPrompt) uploadPrompt.classList.add('hidden');
 }
 
 function removeSlip() {
@@ -718,7 +759,15 @@ function removeSlip() {
   const fileInput = document.getElementById('slip-file-input');
 
   if (previewContainer) previewContainer.classList.add('hidden');
-  if (uploadPrompt) uploadPrompt.classList.remove('hidden');
+  if (uploadPrompt) {
+    uploadPrompt.classList.remove('hidden');
+    uploadPrompt.innerHTML = `
+      <input type="file" id="slip-file-input" accept="image/*" onchange="handleSlipUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer">
+      <svg class="w-8 h-8 text-amber-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      <div class="text-xs font-extrabold text-amber-900">แตะเพื่อเลือกรูปภาพสลิปโอนเงิน *</div>
+      <div class="text-[10px] text-gray-500 mt-0.5">รองรับรูปถ่ายหรือภาพแคปหน้าจอสลิปจากทุกธนาคาร</div>
+    `;
+  }
   if (fileInput) fileInput.value = '';
 }
 
@@ -735,6 +784,14 @@ function handleOrderSubmit(e) {
   if (!nameInput.value.trim()) {
     alert('กรุณากรอกชื่อ - นามสกุล ผู้รับ');
     nameInput.focus();
+    return;
+  }
+
+  // บังคับแนบสลิปการโอนเงิน 100% ป้องกันออเดอร์หลุด/กดเล่น
+  if (!state.slipDataUrl) {
+    alert('⚠️ กรุณาแนบสลิปหลักฐานการโอนเงินก่อนยืนยันคำสั่งซื้อครับ\n(สแกนจ่ายผ่าน QR Code ด้านบน แล้วแตะแนบสลิปด้านล่างได้เลยครับ)');
+    const slipSection = document.getElementById('slip-upload-section');
+    if (slipSection) slipSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -880,7 +937,8 @@ function handleOrderSubmit(e) {
       customerLoyaltyKey: lKey,
       currentPoints: newPoints,
       grandTotal: grandTotal,
-      note: (noteInput && noteInput.value.trim()) || '-'
+      note: (noteInput && noteInput.value.trim()) || '-',
+      slipBase64: state.slipDataUrl // แนบสลิปเพื่อบันทึกลง Google Drive และส่งเข้า LINE
     };
 
     fetch(SHOP_CONFIG.googleSheetWebAppUrl, {
