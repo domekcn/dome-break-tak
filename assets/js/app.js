@@ -643,6 +643,17 @@ function openCheckoutModal(isDirect = false) {
   if (officeRadio) officeRadio.checked = true;
   handleDeliveryMethodChange('office');
 
+  // ดึงข้อมูลผู้สั่งซื้อเดิมมาใส่ให้อัตโนมัติ เพื่อให้นับแต้มสะสมต่อได้ทันทีและสะดวก
+  try {
+    const lastCustomer = JSON.parse(localStorage.getItem('dbt_last_customer') || '{}');
+    const nameInput = document.getElementById('customer-name');
+    const phoneInput = document.getElementById('customer-phone');
+    const addressInput = document.getElementById('customer-address');
+    if (nameInput && !nameInput.value && lastCustomer.name) nameInput.value = lastCustomer.name;
+    if (phoneInput && !phoneInput.value && lastCustomer.phone) phoneInput.value = lastCustomer.phone;
+    if (addressInput && !addressInput.value && lastCustomer.address) addressInput.value = lastCustomer.address;
+  } catch (e) {}
+
   modal.classList.remove('hidden');
 }
 
@@ -806,6 +817,14 @@ function handleOrderSubmit(e) {
     lineMessage
   };
 
+  try {
+    localStorage.setItem('dbt_last_customer', JSON.stringify({
+      name: nameInput.value.trim(),
+      phone: (phoneInput && phoneInput.value.trim()) || '',
+      address: (addressInput && addressInput.value.trim()) || ''
+    }));
+  } catch (e) {}
+
   // คำนวณสรุปแยกขนาดถุงและรสชาติสำหรับลง Google Sheet
   const breakdown = {
     small_original: 0,
@@ -931,7 +950,18 @@ function getLoyaltyKey(name, phone) {
     return 'p_' + cleanPhone;
   }
   const cleanName = (name || '').trim().toLowerCase().replace(/\s+/g, '');
-  return 'n_' + (cleanName || 'guest');
+  if (!cleanName || cleanName === 'guest') return 'n_guest';
+
+  // ตรวจสอบว่าเคยมีบันทึกของชื่อนี้ในระบบมาก่อนหรือไม่ (เพื่อให้นับยอดสะสมต่อได้ทันที)
+  const all = getAllLoyaltyData();
+  for (const [k, v] of Object.entries(all)) {
+    const existingName = (v.customerName || '').trim().toLowerCase().replace(/\s+/g, '');
+    if (existingName && existingName === cleanName) {
+      return k; // เชื่อมโยงกับบัตรเดิมของลูกค้ารายนี้ทันที
+    }
+  }
+
+  return 'n_' + cleanName;
 }
 
 function getAllLoyaltyData() {
